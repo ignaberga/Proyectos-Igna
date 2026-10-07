@@ -1,0 +1,137 @@
+// ============================================================
+// GASTOS DEL VIAJE - Backend de Apps Script
+// ============================================================
+// Que hace: convierte esta planilla en la base de datos compartida de
+// la app del viaje. La app le pide los datos (doGet) y le manda altas
+// y bajas (doPost). Crea sola la hoja "Gastos" la primera vez.
+//
+// Este archivo es una copia de respaldo: el que funciona de verdad es
+// el que esta pegado dentro de la planilla. La direccion /exec NUNCA
+// va en este repositorio.
+//
+// COMO INSTALARLO (una sola vez):
+// 1. Crea una planilla de Google nueva (ej. "Gastos viaje").
+// 2. Extensiones > Apps Script. Borra lo que haya en Code.gs y pega
+//    este archivo completo. Guarda (icono de disquete).
+// 3. Implementar > Nueva implementacion > tipo "Aplicacion web".
+//      - Ejecutar como: Yo
+//      - Quien tiene acceso: Cualquier usuario
+//    Autoriza los permisos que pide Google.
+// 4. Copia la URL que termina en /exec y pasasela a Claude para que
+//    arme los links de instalacion (por chat, nunca en el repo).
+//
+// COMO ACTUALIZARLO (sin que cambie el link):
+//    Pegar, guardar e Implementar > Gestionar implementaciones >
+//    icono de lapiz > Version: "Nueva version" > Implementar.
+//    (NO "Nueva implementacion": cambia el link.)
+// ============================================================
+
+const SHEET_GASTOS = "Gastos";
+const HEADERS = ["ID","Fecha","Tipo","Descripcion","Categoria","Moneda","Monto","Cambio","MontoReales","Pago","Participantes","Cargo"];
+
+function getSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(SHEET_GASTOS);
+  if (!sh) {
+    sh = ss.insertSheet(SHEET_GASTOS);
+    // ID y Fecha como texto plano para que la planilla no los transforme.
+    sh.getRange("A:B").setNumberFormat("@");
+    sh.appendRow(HEADERS);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+function formatDate_(v) {
+  if (Object.prototype.toString.call(v) === "[object Date]") {
+    const y = v.getFullYear();
+    const m = String(v.getMonth() + 1).padStart(2, "0");
+    const d = String(v.getDate()).padStart(2, "0");
+    return y + "-" + m + "-" + d;
+  }
+  return String(v);
+}
+
+function readGastos_() {
+  const rows = getSheet_().getDataRange().getValues().slice(1);
+  return rows.filter(function (r) { return r[0] !== ""; }).map(function (r) {
+    return {
+      id: String(r[0]),
+      fecha: formatDate_(r[1]),
+      tipo: String(r[2] || "gasto"),
+      descripcion: String(r[3] || ""),
+      categoria: String(r[4] || ""),
+      moneda: String(r[5] || "BRL"),
+      monto: Number(r[6]) || 0,
+      cambio: Number(r[7]) || 1,
+      pago: String(r[9] || ""),
+      participantes: String(r[10] || "").split(",").map(function (s) { return s.trim(); }).filter(String),
+      cargo: String(r[11] || "")
+    };
+  });
+}
+
+function gastoToRow_(g) {
+  const monto = Number(g.monto) || 0;
+  const cambio = g.moneda === "BRL" ? 1 : (Number(g.cambio) || 1);
+  return [
+    String(g.id), String(g.fecha || ""), String(g.tipo || "gasto"),
+    String(g.descripcion || ""), String(g.categoria || ""), String(g.moneda || "BRL"),
+    monto, cambio, Math.round(monto * cambio * 100) / 100,
+    String(g.pago || ""), (g.participantes || []).join(", "), String(g.cargo || "")
+  ];
+}
+
+function findRowById_(sh, id) {
+  const data = sh.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(id)) return i + 1;
+  }
+  return -1;
+}
+
+function jsonOut_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function doGet(e) {
+  const action = (e && e.parameter && e.parameter.action) || "get_all";
+  if (action === "get_all") return jsonOut_({ gastos: readGastos_() });
+  return jsonOut_({ error: "accion desconocida" });
+}
+
+function doPost(e) {
+  let body;
+  try {
+    body = JSON.parse(e.postData.contents);
+  } catch (err) {
+    return jsonOut_({ ok: false, error: "body invalido" });
+  }
+
+  // Candado: si dos celulares mandan cambios a la vez, se procesan de a uno.
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(20000);
+  } catch (err) {
+    return jsonOut_({ ok: false, error: "planilla ocupada" });
+  }
+
+  try {
+    const sh = getSheet_();
+    // La app reintenta lo que no pudo confirmar (por ejemplo sin senal),
+    // asi que cada accion tiene que poder repetirse sin duplicar.
+    if (body.action === "add") {
+      if (findRowById_(sh, body.gasto.id) < 0) sh.appendRow(gastoToRow_(body.gasto));
+    } else if (body.action === "delete") {
+      const r = findRowById_(sh, body.id);
+      if (r > 0) sh.deleteRow(r);
+    } else {
+      return jsonOut_({ ok: false, error: "accion desconocida" });
+    }
+    return jsonOut_({ ok: true });
+  } catch (err) {
+    return jsonOut_({ ok: false, error: String(err) });
+  } finally {
+    lock.releaseLock();
+  }
+}

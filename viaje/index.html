@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Viaje">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#F3EFE6">
+<title>Gastos del viaje</title>
+<style>
+  :root {
+    --bg: #F3EFE6;
+    --surface: #FFFFFF;
+    --line: #E2DCCD;
+    --ink: #1F2D33;
+    --ink-soft: #66737A;
+    --sea: #1F6F78;
+    --sea-dark: #164F56;
+    --sea-bg: #DDEDEE;
+    --sun: #C77D1E;
+    --sun-bg: #F7E9D2;
+    --green: #2F7D4F;
+    --green-bg: #E0F0E5;
+    --red: #B0453A;
+    --red-bg: #F6E1DD;
+    --p0: #3A62A8; --p0-bg: #E2E9F5;
+    --p1: #B0602A; --p1-bg: #F6E6DA;
+    --p2: #6E5283; --p2-bg: #EDE6F2;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+  button { font-family: inherit; cursor: pointer; }
+  #app { max-width: 480px; margin: 0 auto; min-height: 100vh; padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+  header { padding: calc(20px + env(safe-area-inset-top, 0px)) 20px 12px; }
+  header .name { font-size: 22px; font-weight: 700; color: var(--sea-dark); }
+  header .sub { font-size: 13px; color: var(--ink-soft); margin-top: 2px; }
+
+  .sync-banner { display: none; margin: 0 16px 12px; padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.35; }
+  .sync-banner strong { display: block; font-size: 14px; margin-bottom: 2px; }
+  .sync-banner.show { display: block; }
+  .sync-banner.wait { background: #FFF4CC; color: #6B5300; }
+  .sync-banner.alert { background: var(--red-bg); color: var(--red); }
+
+  .tab { display: none; }
+  .tab.active { display: block; }
+
+  .card { margin: 0 16px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; }
+  .card h2 { margin: 0 0 10px; font-size: 15px; color: var(--ink-soft); font-weight: 600; }
+  .total .amount { font-size: 32px; font-weight: 700; color: var(--sea-dark); line-height: 1.1; }
+  .total .note { font-size: 12px; color: var(--ink-soft); margin-top: 6px; }
+
+  .actions { display: flex; gap: 10px; margin: 0 16px 16px; }
+  .actions button { flex: 1; padding: 16px 0; border-radius: var(--radius); border: none; font-size: 16px; font-weight: 700; }
+  .btn-main { background: var(--sea); color: #fff; }
+  .btn-soft { background: var(--sea-bg); color: var(--sea-dark); }
+
+  .tag { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+  .tag.p0 { background: var(--p0-bg); color: var(--p0); }
+  .tag.p1 { background: var(--p1-bg); color: var(--p1); }
+  .tag.p2 { background: var(--p2-bg); color: var(--p2); }
+
+  .person-row { padding: 12px 0; border-top: 1px solid var(--line); }
+  .person-row:first-of-type { border-top: none; padding-top: 2px; }
+  .person-top { display: flex; align-items: center; justify-content: space-between; }
+  .saldo { font-size: 17px; font-weight: 700; text-align: right; }
+  .saldo small { display: block; font-size: 11px; font-weight: 600; }
+  .saldo.pos { color: var(--green); }
+  .saldo.neg { color: var(--red); }
+  .saldo.zero { color: var(--ink-soft); }
+  .person-detail { display: flex; gap: 14px; margin-top: 6px; font-size: 12px; color: var(--ink-soft); }
+  .person-detail b { color: var(--ink); font-weight: 600; }
+
+  .settle { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .settle .txt { flex: 1; line-height: 1.9; }
+  .settle:first-of-type { border-top: none; padding-top: 0; }
+  .settle .amt { font-weight: 700; }
+  .settle button { flex-shrink: 0; border: 1px solid var(--line); background: var(--bg); border-radius: 10px; padding: 7px 10px; font-size: 12px; font-weight: 600; color: var(--sea-dark); }
+  .empty { color: var(--ink-soft); font-size: 14px; text-align: center; padding: 8px 0; }
+
+  .day-label { margin: 16px 20px 6px; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+  .day-label::first-letter { text-transform: uppercase; }
+  .move { display: flex; align-items: flex-start; gap: 10px; margin: 0 16px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 12px 12px 14px; }
+  .move.pago { background: var(--green-bg); border-color: #C6E2CF; }
+  .move .main { flex: 1; min-width: 0; }
+  .move .title { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+  .move .meta { font-size: 12px; color: var(--ink-soft); margin-top: 4px; line-height: 1.5; }
+  .move .right { text-align: right; }
+  .move .amt { font-size: 16px; font-weight: 700; white-space: nowrap; }
+  .move .conv { font-size: 11px; color: var(--ink-soft); white-space: nowrap; margin-top: 2px; }
+  .pencil { border: none; background: transparent; font-size: 17px; padding: 2px 4px; color: var(--ink-soft); }
+
+  .cat-row { display: flex; justify-content: space-between; padding: 7px 0; font-size: 14px; border-top: 1px solid var(--line); }
+  .cat-row:first-of-type { border-top: none; }
+
+  .filters { display: flex; gap: 6px; margin: 0 16px 6px; overflow-x: auto; }
+  .chip { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 8px 13px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .chip.sel { background: var(--sea); border-color: var(--sea); color: #fff; }
+
+  nav { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surface); border-top: 1px solid var(--line); display: flex; justify-content: center; padding-bottom: env(safe-area-inset-bottom, 0px); z-index: 10; }
+  nav .in { display: flex; width: 100%; max-width: 480px; }
+  nav button { flex: 1; border: none; background: none; padding: 12px 0 10px; font-size: 12px; font-weight: 600; color: var(--ink-soft); display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  nav button .ic { font-size: 20px; }
+  nav button.active { color: var(--sea-dark); }
+
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(20, 30, 35, 0.45); z-index: 20; align-items: flex-end; justify-content: center; }
+  .overlay.open { display: flex; }
+  .sheet { background: var(--surface); width: 100%; max-width: 480px; max-height: 92vh; overflow-y: auto; border-radius: 20px 20px 0 0; padding: 20px 18px calc(18px + env(safe-area-inset-bottom, 0px)); }
+  .sheet h3 { margin: 0 0 14px; font-size: 19px; }
+  .field { margin-bottom: 14px; }
+  .field > label { display: block; font-size: 13px; font-weight: 600; color: var(--ink-soft); margin-bottom: 6px; }
+  .field input[type=text], .field input[type=date], .field select {
+    width: 100%; padding: 12px; font-size: 16px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); font-family: inherit;
+  }
+  .amount-row { display: flex; gap: 8px; }
+  .amount-row input { flex: 1; font-size: 24px !important; font-weight: 700; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .seg button { border: none; background: #fff; padding: 0 14px; font-size: 15px; font-weight: 700; color: var(--ink-soft); }
+  .seg button.sel { background: var(--sea); color: #fff; }
+  .rate-row { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+  .rate-row input { width: 110px !important; }
+  .hint { font-size: 12px; color: var(--ink-soft); margin-top: 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chips .chip { padding: 10px 14px; }
+  .err { display: none; background: var(--red-bg); color: var(--red); padding: 10px 12px; border-radius: 10px; font-size: 14px; margin-bottom: 12px; }
+  .sheet-actions { display: flex; gap: 10px; margin-top: 6px; }
+  .sheet-actions button { flex: 1; padding: 15px 0; border-radius: 12px; border: none; font-size: 16px; font-weight: 700; }
+  .btn-cancel { background: var(--bg); color: var(--ink); }
+  .btn-danger { background: var(--red); color: #fff; }
+  .menu-btn { display: block; width: 100%; padding: 15px; margin-bottom: 8px; border-radius: 12px; border: 1px solid var(--line); background: #fff; font-size: 16px; font-weight: 600; text-align: center; }
+  .menu-btn.danger { color: var(--red); }
+  .confirm-text { font-size: 15px; line-height: 1.45; margin-bottom: 14px; }
+
+  .who-sheet .chips { flex-direction: column; }
+  .who-sheet .chip { padding: 15px; font-size: 17px; text-align: center; }
+
+  .link-state { font-size: 14px; font-weight: 600; }
+  .link-state.ok { color: var(--green); }
+  .link-state.no { color: var(--red); }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="name">Gastos del viaje</div>
+    <div class="sub">Gastón, David e Ignacio · saldos en reales</div>
+  </header>
+
+  <div id="syncBanner" class="sync-banner"></div>
+
+  <!-- INICIO -->
+  <section id="tab-inicio" class="tab active">
+    <div class="actions">
+      <button id="openExpense" class="btn-main">+ Cargar gasto</button>
+      <button id="openPayment" class="btn-soft">Registrar pago</button>
+    </div>
+
+    <div class="card total">
+      <h2>Total gastado en el viaje</h2>
+      <div class="amount" id="tripTotal">R$ 0</div>
+      <div class="note" id="tripNote"></div>
+    </div>
+
+    <div class="card">
+      <h2>Estado de cuenta</h2>
+      <div id="balances"></div>
+    </div>
+
+    <div class="card">
+      <h2>Para quedar a mano</h2>
+      <div id="settlements"></div>
+    </div>
+
+    <div class="day-label">Últimos movimientos</div>
+    <div id="recentList"></div>
+  </section>
+
+  <!-- GASTOS -->
+  <section id="tab-gastos" class="tab">
+    <div class="filters" id="personFilter"></div>
+    <div class="card" style="margin-top:10px">
+      <h2 id="catTitle">Por categoría</h2>
+      <div id="catTotals"></div>
+    </div>
+    <div id="fullList"></div>
+  </section>
+
+  <!-- CONFIG -->
+  <section id="tab-config" class="tab">
+    <div class="card">
+      <h2>¿Quién usa este celular?</h2>
+      <div class="field" style="margin-bottom:6px">
+        <select id="phoneOwner"></select>
+      </div>
+      <div class="hint">Se usa para precargar "¿Quién pagó?" al cargar un gasto.</div>
+    </div>
+    <div class="card">
+      <h2>Planilla de Google</h2>
+      <div id="linkState" class="link-state"></div>
+      <div id="lastSyncText" class="hint"></div>
+    </div>
+  </section>
+</div>
+
+<nav>
+  <div class="in">
+    <button data-tab="inicio" class="active"><span class="ic">🏠</span>Inicio</button>
+    <button data-tab="gastos"><span class="ic">🧾</span>Gastos</button>
+    <button data-tab="config"><span class="ic">⚙️</span>Config</button>
+  </div>
+</nav>
+
+<!-- Formulario de gasto / pago -->
+<div id="formOverlay" class="overlay">
+  <div class="sheet">
+    <h3 id="formTitle">Cargar gasto</h3>
+    <div id="formErr" class="err"></div>
+
+    <div class="field">
+      <label id="amountLabel">Monto</label>
+      <div class="amount-row">
+        <input id="fAmount" type="text" inputmode="decimal" placeholder="0" autocomplete="off">
+        <div class="seg" id="currencySeg">
+          <button data-cur="BRL" class="sel">R$</button>
+          <button data-cur="USD">US$</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="field" id="rateField" style="display:none">
+      <label>Tipo de cambio</label>
+      <div class="rate-row">1 US$ = <input id="fRate" type="text" inputmode="decimal" placeholder="0,00" autocomplete="off"> R$</div>
+      <div class="hint" id="rateHint"></div>
+    </div>
+
+    <div class="field" id="descField">
+      <label>Descripción</label>
+      <input id="fDesc" type="text" placeholder="Ej.: Cena en la playa" autocomplete="off">
+    </div>
+
+    <div class="field" id="catField">
+      <label>Categoría</label>
+      <div class="chips" id="catChips"></div>
+    </div>
+
+    <div class="field">
+      <label id="payerLabel">¿Quién pagó?</label>
+      <div class="chips" id="payerChips"></div>
+    </div>
+
+    <div class="field">
+      <label id="partLabel">¿Quiénes se suman a este gasto?</label>
+      <div class="chips" id="partChips"></div>
+      <div class="hint" id="splitHint"></div>
+    </div>
+
+    <div class="field">
+      <label>Fecha</label>
+      <input id="fDate" type="date">
+    </div>
+
+    <div class="sheet-actions">
+      <button class="btn-cancel" id="cancelBtn">Cancelar</button>
+      <button class="btn-main" id="saveBtn">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Lápiz: editar / eliminar -->
+<div id="actionsOverlay" class="overlay">
+  <div class="sheet" id="actionsSheet"></div>
+</div>
+
+<!-- Primera vez: quién usa el celular -->
+<div id="whoOverlay" class="overlay">
+  <div class="sheet who-sheet">
+    <h3>¿Quién usa este celular?</h3>
+    <div class="chips" id="whoChips"></div>
+    <div class="hint" style="text-align:center;margin-top:12px">Se puede cambiar después en Config.</div>
+  </div>
+</div>
+
+<script>
+const PEOPLE = ["Gastón", "David", "Ignacio"];
+const CATEGORIES = ["Hospedaje", "Movilidad", "Comida", "Supermercado", "Salidas", "Excursiones", "Compras", "Otros"];
+const CUR_SYMBOL = { BRL: "R$", USD: "US$" };
+
+// La planilla de Google (via Apps Script) es la base de datos real,
+// compartida entre los tres celulares. Su direccion viene en el link de
+// instalacion (#vincular=...&quien=...) y queda grabada en el icono de la
+// pantalla de inicio. La direccion nunca va en este repositorio.
+const SHEET_URL_KEY = "viaje_sheet_url";
+const PERSON_KEY = "viaje_persona";
+const LAST_SYNC_KEY = "viaje_ultima_sync";
+const LOCAL_CACHE_KEY = "viaje_cache_v1";
+const OUTBOX_KEY = "viaje_pendientes_v1";
+
+let sheetUrl = "";
+let phoneOwner = "";
+let gastos = [];
+try { sheetUrl = localStorage.getItem(SHEET_URL_KEY) || ""; } catch (e) {}
+try { phoneOwner = localStorage.getItem(PERSON_KEY) || ""; } catch (e) {}
+if (!PEOPLE.includes(phoneOwner)) phoneOwner = "";
+
+function plain(s) {
+  return String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+function personIndex(p) { return PEOPLE.indexOf(p); }
+function tagHtml(p) {
+  const i = personIndex(p);
+  return '<span class="tag p' + (i < 0 ? 2 : i) + '">' + escapeHtml(p) + "</span>";
+}
+
+function isSheetUrl(url) {
+  return /^https:\/\/script\.google(usercontent)?\.com\//.test(url);
+}
+
+function readInstallLink() {
+  const hash = (location.hash || "").replace(/^#/, "");
+  if (!hash) return;
+  const params = new URLSearchParams(hash);
+  const url = (params.get("vincular") || "").trim();
+  if (isSheetUrl(url)) {
+    sheetUrl = url;
+    try { localStorage.setItem(SHEET_URL_KEY, sheetUrl); } catch (e) {}
+  }
+  // La persona del link solo se toma la primera vez; despues manda Config.
+  const quien = PEOPLE.find(p => plain(p) === plain(params.get("quien")));
+  if (!phoneOwner && quien) {
+    phoneOwner = quien;
+    try { localStorage.setItem(PERSON_KEY, phoneOwner); } catch (e) {}
+  }
+}
+readInstallLink();
+
+// ---------- Copia local y cola de pendientes ----------
+
+function loadLocalCache() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LOCAL_CACHE_KEY) || "{}");
+    if (Array.isArray(parsed.gastos)) gastos = parsed.gastos;
+  } catch (e) {}
+}
+function saveLocalCache() {
+  try { localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify({ gastos: gastos })); } catch (e) {}
+}
+
+// Cambios que todavia no llegaron a la planilla. Quedan guardados en el
+// celular y se reintentan solos, en orden, hasta que la planilla confirma.
+let outbox = [];
+try {
+  outbox = JSON.parse(localStorage.getItem(OUTBOX_KEY) || "[]");
+  if (!Array.isArray(outbox)) outbox = [];
+} catch (e) { outbox = []; }
+
+function saveOutbox() {
+  try { localStorage.setItem(OUTBOX_KEY, JSON.stringify(outbox)); } catch (e) {}
+}
+
+function queueChange(action, payload) {
+  outbox.push({ opId: Date.now() + "-" + Math.random().toString(36).slice(2, 8), action: action, payload: payload });
+  saveOutbox();
+  renderSyncState();
+  flushOutbox();
+}
+
+function sameId(a, b) { return String(a) === String(b); }
+
+function isApplied(op, data) {
+  if (op.action === "add") return data.gastos.some(g => sameId(g.id, op.payload.gasto.id));
+  if (op.action === "delete") return !data.gastos.some(g => sameId(g.id, op.payload.id));
+  return false;
+}
+
+function applyOutboxLocally() {
+  outbox.forEach(op => {
+    if (op.action === "add") {
+      gastos = gastos.filter(g => !sameId(g.id, op.payload.gasto.id));
+      gastos.push(op.payload.gasto);
+    } else if (op.action === "delete") {
+      gastos = gastos.filter(g => !sameId(g.id, op.payload.id));
+    }
+  });
+}
+
+let flushing = false;
+async function flushOutbox() {
+  if (!sheetUrl || flushing || outbox.length === 0) return;
+  flushing = true;
+  let sentAny = false;
+  while (outbox.length > 0) {
+    const op = outbox[0];
+    let ok = false;
+    try {
+      const res = await fetch(sheetUrl, {
+        method: "POST",
+        body: JSON.stringify(Object.assign({ action: op.action }, op.payload))
+      });
+      const data = await res.json();
+      ok = !!(data && data.ok);
+    } catch (e) {
+      // Sin senal o respuesta ilegible: queda pendiente y se reintenta.
+    }
+    if (!ok) break;
+    outbox.shift();
+    saveOutbox();
+    sentAny = true;
+  }
+  flushing = false;
+  renderSyncState();
+  if (sentAny) fetchAllFromSheet();
+}
+
+let syncProblem = "";
+let fetchSeq = 0;
+
+async function fetchAllFromSheet() {
+  if (!sheetUrl) { renderAll(); return; }
+  const seq = ++fetchSeq;
+  try {
+    const sep = sheetUrl.includes("?") ? "&" : "?";
+    const res = await fetch(sheetUrl + sep + "action=get_all");
+    const data = await res.json();
+    if (seq !== fetchSeq) return;
+    // Una respuesta sin la lista de gastos nunca pisa lo del celular.
+    if (!data || !Array.isArray(data.gastos)) {
+      syncProblem = "script";
+      renderAll();
+      return;
+    }
+    while (outbox.length > 0 && isApplied(outbox[0], data)) outbox.shift();
+    saveOutbox();
+    gastos = data.gastos;
+    applyOutboxLocally();
+    saveLocalCache();
+    syncProblem = "";
+    try { localStorage.setItem(LAST_SYNC_KEY, String(Date.now())); } catch (e) {}
+  } catch (e) {
+    if (seq !== fetchSeq) return;
+    syncProblem = "red";
+  }
+  renderAll();
+}
+
+async function syncNow() {
+  await fetchAllFromSheet();
+  await flushOutbox();
+}
+
+function renderSyncState() {
+  const banner = document.getElementById("syncBanner");
+  const n = outbox.length;
+  const uno = n === 1;
+  let cls = "", html = "";
+  if (!sheetUrl) {
+    cls = "alert";
+    html = "<strong>Este celular no está conectado a la planilla</strong>Lo que cargues queda solo acá y no les llega a los demás. Pedile a Ignacio el link de instalación.";
+  } else if (n > 0) {
+    cls = "wait";
+    html = "<strong>" + (uno ? "1 cambio sin enviar" : n + " cambios sin enviar") + "</strong>" +
+      (uno ? "Está guardado en este celular y se manda solo" : "Están guardados en este celular y se mandan solos") +
+      " cuando haya señal.";
+  } else if (syncProblem === "script") {
+    cls = "alert";
+    html = "<strong>La planilla contestó con un error</strong>Se muestra lo guardado en este celular y no se perdió nada. Avisale a Ignacio.";
+  } else if (syncProblem === "red") {
+    cls = "wait";
+    html = "<strong>Sin conexión con la planilla</strong>Se muestra lo último guardado. Podés seguir cargando: se manda solo cuando vuelva la señal.";
+  }
+  banner.className = "sync-banner" + (cls ? " show " + cls : "");
+  banner.innerHTML = html;
+
+  const state = document.getElementById("linkState");
+  state.className = "link-state " + (sheetUrl ? "ok" : "no");
+  state.textContent = sheetUrl ? "✓ Este celular está conectado a la planilla." : "✗ Este celular no está conectado a la planilla.";
+  const last = document.getElementById("lastSyncText");
+  let t = "";
+  try { t = localStorage.getItem(LAST_SYNC_KEY) || ""; } catch (e) {}
+  if (sheetUrl && t) {
+    const d = new Date(Number(t));
+    last.textContent = "Última lectura: " +
+      d.toLocaleString("es-AR", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" }) +
+      (n > 0 ? " · " + n + (uno ? " cambio pendiente" : " cambios pendientes") : "");
+  } else {
+    last.textContent = "";
+  }
+}
+
+// ---------- Números ----------
+
+function fmtCur(n, cur) {
+  const v = Math.round(n * 100) / 100;
+  const dec = Math.abs(v % 1) > 0.0001 ? 2 : 0;
+  return (v < 0 ? "-" : "") + CUR_SYMBOL[cur || "BRL"] + " " +
+    Math.abs(v).toLocaleString("es-AR", { minimumFractionDigits: dec, maximumFractionDigits: 2 });
+}
+function fmtBRL(n) { return fmtCur(n, "BRL"); }
+function fmtNum(n, maxDec) { return Number(n).toLocaleString("es-AR", { maximumFractionDigits: maxDec }); }
+function parseNum(str) {
+  const clean = String(str || "").replace(/\./g, "").replace(",", ".");
+  return clean ? parseFloat(clean) : NaN;
+}
+
+// Mientras se escribe, pone los puntos de miles y deja una sola coma.
+// Si el teclado del celular solo tiene punto, el punto se toma como coma.
+function formatNumberInput(el, e, maxDec) {
+  let value = el.value;
+  let caret = el.selectionStart;
+  if (e && e.data === "." && !value.slice(0, caret - 1).includes(",") && !value.slice(caret).includes(",")) {
+    value = value.slice(0, caret - 1) + "," + value.slice(caret);
+  }
+  const before = value.slice(0, caret).replace(/[^\d,]/g, "").length;
+  const clean = value.replace(/[^\d,]/g, "");
+  const comma = clean.indexOf(",");
+  let intPart = comma >= 0 ? clean.slice(0, comma) : clean;
+  const decPart = comma >= 0 ? clean.slice(comma + 1).replace(/,/g, "").slice(0, maxDec) : null;
+  intPart = intPart.replace(/^0+(?=\d)/, "");
+  if (decPart !== null && intPart === "") intPart = "0";
+  const out = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + (decPart !== null ? "," + decPart : "");
+  el.value = out;
+  let pos = 0, count = 0;
+  while (pos < out.length && count < before) {
+    if (/[\d,]/.test(out[pos])) count++;
+    pos++;
+  }
+  try { el.setSelectionRange(pos, pos); } catch (err) {}
+}
+
+// Fecha de hoy en la hora del celular.
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
+function escapeHtml(str) {
+  return String(str == null ? "" : str).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// ---------- Cuentas ----------
+
+function inBRL(g) {
+  return (Number(g.monto) || 0) * (g.moneda === "BRL" ? 1 : (Number(g.cambio) || 0));
+}
+
+// Puso = lo que pagó en gastos. Consumió = su parte de los gastos en que
+// participó. Los pagos entre nosotros mueven el saldo pero no son gasto.
+function computeBalances() {
+  const b = {};
+  PEOPLE.forEach(p => { b[p] = { puso: 0, consumio: 0, envio: 0, recibio: 0 }; });
+  gastos.forEach(g => {
+    const total = inBRL(g);
+    const parts = (g.participantes || []).filter(p => b[p]);
+    if (!b[g.pago] || parts.length === 0) return;
+    if (g.tipo === "pago") {
+      b[g.pago].envio += total;
+      b[parts[0]].recibio += total;
+    } else {
+      b[g.pago].puso += total;
+      parts.forEach(p => { b[p].consumio += total / parts.length; });
+    }
+  });
+  PEOPLE.forEach(p => {
+    const x = b[p];
+    x.saldo = Math.round((x.puso - x.consumio + x.envio - x.recibio) * 100) / 100;
+  });
+  return b;
+}
+
+// Quién le paga a quién, con la menor cantidad de pagos.
+function computeSettlements(b) {
+  const deb = [], cred = [];
+  PEOPLE.forEach(p => {
+    if (b[p].saldo < -0.009) deb.push({ p: p, v: -b[p].saldo });
+    else if (b[p].saldo > 0.009) cred.push({ p: p, v: b[p].saldo });
+  });
+  deb.sort((a, c) => c.v - a.v);
+  cred.sort((a, c) => c.v - a.v);
+  const out = [];
+  let i = 0, j = 0;
+  while (i < deb.length && j < cred.length) {
+    const v = Math.min(deb[i].v, cred[j].v);
+    if (v > 0.009) out.push({ from: deb[i].p, to: cred[j].p, v: Math.round(v * 100) / 100 });
+    deb[i].v -= v;
+    cred[j].v -= v;
+    if (deb[i].v <= 0.009) i++;
+    if (cred[j].v <= 0.009) j++;
+  }
+  return out;
+}
+
+// ---------- Pantallas ----------
+
+function sortedGastos(list) {
+  return list.slice().sort((a, c) => (c.fecha || "").localeCompare(a.fecha || "") || String(c.id).localeCompare(String(a.id)));
+}
+
+function dayLabel(dateStr) {
+  const [y, m, d] = String(dateStr).split("-").map(Number);
+  if (!y) return dateStr;
+  return new Date(y, m - 1, d).toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
+}
+
+function moveHtml(g) {
+  const isPago = g.tipo === "pago";
+  const parts = g.participantes || [];
+  const title = isPago
+    ? escapeHtml(g.pago) + " le pagó a " + escapeHtml(parts[0] || "")
+    : escapeHtml(g.descripcion || g.categoria || "Gasto");
+  let meta;
+  if (isPago) {
+    meta = "Pago para saldar cuentas";
+  } else {
+    const who = parts.length === PEOPLE.length ? "Los 3" : parts.map(escapeHtml).join(" y ");
+    meta = (g.descripcion ? escapeHtml(g.categoria) + " · " : "") + "Pagó " + tagHtml(g.pago) +
+      "<br>Se suman: " + who + " · " + fmtBRL(inBRL(g) / (parts.length || 1)) + " c/u";
+  }
+  const conv = g.moneda !== "BRL"
+    ? '<div class="conv">≈ ' + fmtBRL(inBRL(g)) + " (" + fmtNum(g.cambio, 4) + ")</div>" : "";
+  return '<div class="move' + (isPago ? " pago" : "") + '">' +
+    '<div class="main"><div class="title">' + title + '</div><div class="meta">' + meta + "</div></div>" +
+    '<div class="right"><div class="amt">' + fmtCur(g.monto, g.moneda) + "</div>" + conv + "</div>" +
+    '<button class="pencil" data-edit="' + escapeHtml(g.id) + '" aria-label="Editar o eliminar">✏️</button>' +
+    "</div>";
+}
+
+function renderList(containerId, list, emptyText) {
+  const el = document.getElementById(containerId);
+  if (list.length === 0) {
+    el.innerHTML = '<div class="card empty">' + emptyText + "</div>";
+    return;
+  }
+  let html = "", lastDay = null;
+  list.forEach(g => {
+    if (g.fecha !== lastDay) {
+      html += '<div class="day-label">' + escapeHtml(dayLabel(g.fecha)) + "</div>";
+      lastDay = g.fecha;
+    }
+    html += moveHtml(g);
+  });
+  el.innerHTML = html;
+}
+
+function renderInicio() {
+  const soloGastos = gastos.filter(g => g.tipo !== "pago");
+  const total = soloGastos.reduce((s, g) => s + inBRL(g), 0);
+  document.getElementById("tripTotal").textContent = fmtBRL(total);
+  const usd = soloGastos.filter(g => g.moneda === "USD");
+  document.getElementById("tripNote").textContent = soloGastos.length === 0
+    ? "Todavía no hay gastos cargados."
+    : soloGastos.length + (soloGastos.length === 1 ? " gasto" : " gastos") +
+      (usd.length ? " · incluye " + fmtCur(usd.reduce((s, g) => s + Number(g.monto), 0), "USD") + " pasados a reales" : "");
+
+  const b = computeBalances();
+  document.getElementById("balances").innerHTML = PEOPLE.map(p => {
+    const x = b[p];
+    const cls = x.saldo > 0.009 ? "pos" : x.saldo < -0.009 ? "neg" : "zero";
+    const lbl = cls === "pos" ? "le deben" : cls === "neg" ? "debe" : "está a mano";
+    const pagos = (x.envio || x.recibio)
+      ? "<span>Pagos: <b>" + fmtBRL(x.envio - x.recibio) + "</b></span>" : "";
+    return '<div class="person-row"><div class="person-top">' + tagHtml(p) +
+      '<div class="saldo ' + cls + '">' + (cls === "zero" ? "" : fmtBRL(Math.abs(x.saldo))) + "<small>" + lbl + "</small></div></div>" +
+      '<div class="person-detail"><span>Puso: <b>' + fmtBRL(x.puso) + "</b></span><span>Consumió: <b>" + fmtBRL(x.consumio) + "</b></span>" + pagos + "</div></div>";
+  }).join("");
+
+  const s = computeSettlements(b);
+  document.getElementById("settlements").innerHTML = s.length === 0
+    ? '<div class="empty">Están todos a mano 🙌</div>'
+    : s.map((t, i) => '<div class="settle"><div class="txt">' + tagHtml(t.from) + " le paga a " + tagHtml(t.to) +
+        ' <span class="amt">' + fmtBRL(t.v) + '</span></div><button data-settle="' + i + '">Ya pagó</button></div>').join("");
+  document.querySelectorAll("[data-settle]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const t = s[Number(btn.getAttribute("data-settle"))];
+      openForm("pago", null, { pago: t.from, para: t.to, monto: t.v });
+    });
+  });
+
+  renderList("recentList", sortedGastos(gastos).slice(0, 5), "Todavía no hay movimientos. Tocá “+ Cargar gasto”.");
+}
+
+let personFilter = "";
+function renderGastos() {
+  document.getElementById("personFilter").innerHTML = ["", ...PEOPLE].map(p =>
+    '<button class="chip' + (personFilter === p ? " sel" : "") + '" data-pf="' + p + '">' + (p || "Todos") + "</button>").join("");
+  document.querySelectorAll("[data-pf]").forEach(btn => {
+    btn.addEventListener("click", () => { personFilter = btn.getAttribute("data-pf"); renderGastos(); });
+  });
+
+  const list = personFilter
+    ? gastos.filter(g => g.pago === personFilter || (g.participantes || []).includes(personFilter))
+    : gastos;
+
+  // Por categoría: el total del gasto, o la parte de la persona elegida.
+  const tot = {};
+  list.filter(g => g.tipo !== "pago").forEach(g => {
+    const parts = g.participantes || [];
+    let v = inBRL(g);
+    if (personFilter) v = parts.includes(personFilter) ? v / parts.length : 0;
+    if (v) tot[g.categoria || "Otros"] = (tot[g.categoria || "Otros"] || 0) + v;
+  });
+  document.getElementById("catTitle").textContent = personFilter ? "Lo que consumió " + personFilter + ", por categoría" : "Por categoría";
+  const cats = Object.keys(tot).sort((a, c) => tot[c] - tot[a]);
+  const sum = cats.reduce((s, k) => s + tot[k], 0);
+  document.getElementById("catTotals").innerHTML = cats.length === 0
+    ? '<div class="empty">Sin gastos todavía.</div>'
+    : cats.map(k => '<div class="cat-row"><span>' + escapeHtml(k) + "</span><b>" + fmtBRL(tot[k]) + "</b></div>").join("") +
+      '<div class="cat-row"><b>Total</b><b>' + fmtBRL(sum) + "</b></div>";
+
+  renderList("fullList", sortedGastos(list), "No hay movimientos para mostrar.");
+}
+
+function renderConfig() {
+  const sel = document.getElementById("phoneOwner");
+  sel.innerHTML = (phoneOwner ? "" : '<option value="">Elegir…</option>') +
+    PEOPLE.map(p => '<option' + (p === phoneOwner ? " selected" : "") + ">" + p + "</option>").join("");
+}
+
+function renderAll() {
+  renderInicio();
+  renderGastos();
+  renderSyncState();
+}
+
+// ---------- Formulario ----------
+
+let formMode = "gasto";
+let editing = null;
+let fCurrency = "BRL";
+let fCategory = CATEGORIES[0];
+let fPayer = "";
+let fParts = [];
+
+function chipsHtml(items, isSel, attr) {
+  return items.map(v => '<button type="button" class="chip' + (isSel(v) ? " sel" : "") + '" ' + attr + '="' + escapeHtml(v) + '">' + escapeHtml(v) + "</button>").join("");
+}
+
+function lastRate() {
+  const usd = sortedGastos(gastos.filter(g => g.moneda === "USD" && Number(g.cambio) > 0));
+  return usd.length ? Number(usd[0].cambio) : 0;
+}
+
+function renderForm() {
+  const isPago = formMode === "pago";
+  document.querySelectorAll("#currencySeg button").forEach(b => b.classList.toggle("sel", b.getAttribute("data-cur") === fCurrency));
+  document.getElementById("rateField").style.display = fCurrency === "BRL" ? "none" : "block";
+
+  document.getElementById("catChips").innerHTML = chipsHtml(CATEGORIES, v => v === fCategory, "data-cat");
+  document.getElementById("payerChips").innerHTML = chipsHtml(PEOPLE, v => v === fPayer, "data-payer");
+  const partOptions = isPago ? PEOPLE.filter(p => p !== fPayer) : PEOPLE;
+  document.getElementById("partChips").innerHTML = chipsHtml(partOptions, v => fParts.includes(v), "data-part");
+
+  document.querySelectorAll("[data-cat]").forEach(b => b.addEventListener("click", () => { fCategory = b.getAttribute("data-cat"); renderForm(); }));
+  document.querySelectorAll("[data-payer]").forEach(b => b.addEventListener("click", () => {
+    fPayer = b.getAttribute("data-payer");
+    if (isPago) fParts = fParts.filter(p => p !== fPayer);
+    renderForm();
+  }));
+  document.querySelectorAll("[data-part]").forEach(b => b.addEventListener("click", () => {
+    const p = b.getAttribute("data-part");
+    if (isPago) fParts = [p];
+    else fParts = fParts.includes(p) ? fParts.filter(x => x !== p) : PEOPLE.filter(x => x === p || fParts.includes(x));
+    renderForm();
+  }));
+  updateHints();
+}
+
+function updateHints() {
+  const amount = parseNum(document.getElementById("fAmount").value);
+  const rate = parseNum(document.getElementById("fRate").value);
+  const brl = fCurrency === "BRL" ? amount : amount * rate;
+  const rateHint = document.getElementById("rateHint");
+  rateHint.textContent = fCurrency !== "BRL" && brl > 0 ? "≈ " + fmtBRL(brl) : "Cuántos reales vale 1 dólar. Se precarga el último que usaron.";
+  const hint = document.getElementById("splitHint");
+  if (formMode === "pago" || fParts.length === 0 || !(brl > 0)) { hint.textContent = ""; return; }
+  hint.textContent = fParts.length === 1 ? "Todo para " + fParts[0] + ": " + fmtBRL(brl) : "Se divide en " + fParts.length + ": " + fmtBRL(brl / fParts.length) + " cada uno";
+}
+
+function openForm(mode, g, preset) {
+  formMode = g ? g.tipo : mode;
+  editing = g || null;
+  const isPago = formMode === "pago";
+  document.getElementById("formTitle").textContent = (g ? "Editar " : isPago ? "Registrar " : "Cargar ") + (isPago ? "pago" : "gasto");
+  document.getElementById("amountLabel").textContent = isPago ? "¿Cuánto le pagó?" : "Monto";
+  document.getElementById("payerLabel").textContent = isPago ? "¿Quién paga?" : "¿Quién pagó?";
+  document.getElementById("partLabel").textContent = isPago ? "¿A quién le paga?" : "¿Quiénes se suman a este gasto?";
+  document.getElementById("descField").style.display = isPago ? "none" : "block";
+  document.getElementById("catField").style.display = isPago ? "none" : "block";
+  document.getElementById("formErr").style.display = "none";
+
+  if (g) {
+    fCurrency = g.moneda || "BRL";
+    fCategory = g.categoria || CATEGORIES[0];
+    fPayer = g.pago;
+    fParts = (g.participantes || []).slice();
+    document.getElementById("fAmount").value = fmtNum(g.monto, 2);
+    document.getElementById("fRate").value = g.moneda === "BRL" ? "" : fmtNum(g.cambio, 4);
+    document.getElementById("fDesc").value = g.descripcion || "";
+    document.getElementById("fDate").value = g.fecha || todayStr();
+  } else {
+    fCurrency = "BRL";
+    fCategory = CATEGORIES[0];
+    fPayer = (preset && preset.pago) || phoneOwner || "";
+    fParts = isPago ? (preset && preset.para ? [preset.para] : []) : PEOPLE.slice();
+    document.getElementById("fAmount").value = preset && preset.monto ? fmtNum(preset.monto, 2) : "";
+    const r = lastRate();
+    document.getElementById("fRate").value = r ? fmtNum(r, 4) : "";
+    document.getElementById("fDesc").value = "";
+    document.getElementById("fDate").value = todayStr();
+  }
+  renderForm();
+  document.getElementById("formOverlay").classList.add("open");
+  document.getElementById("formOverlay").querySelector(".sheet").scrollTop = 0;
+}
+
+function closeForm() {
+  document.getElementById("formOverlay").classList.remove("open");
+  editing = null;
+}
+
+function formError(msg) {
+  const el = document.getElementById("formErr");
+  el.textContent = msg;
+  el.style.display = "block";
+  document.getElementById("formOverlay").querySelector(".sheet").scrollTop = 0;
+}
+
+function saveForm() {
+  const isPago = formMode === "pago";
+  const amount = parseNum(document.getElementById("fAmount").value);
+  if (!(amount > 0)) return formError("Poné un monto válido.");
+  const rate = fCurrency === "BRL" ? 1 : parseNum(document.getElementById("fRate").value);
+  if (!(rate > 0)) return formError("Poné el tipo de cambio: cuántos reales vale 1 dólar.");
+  if (!PEOPLE.includes(fPayer)) return formError(isPago ? "Elegí quién paga." : "Elegí quién pagó.");
+  if (fParts.length === 0) return formError(isPago ? "Elegí a quién le paga." : "Elegí quiénes se suman al gasto.");
+  const fecha = document.getElementById("fDate").value;
+  if (!fecha) return formError("Elegí una fecha.");
+
+  const entry = {
+    id: editing ? editing.id : String(Date.now()) + Math.random().toString(36).slice(2, 5),
+    fecha: fecha,
+    tipo: formMode,
+    descripcion: isPago ? "" : document.getElementById("fDesc").value.trim(),
+    categoria: isPago ? "" : fCategory,
+    moneda: fCurrency,
+    monto: Math.round(amount * 100) / 100,
+    cambio: rate,
+    pago: fPayer,
+    participantes: PEOPLE.filter(p => fParts.includes(p)),
+    cargo: editing ? (editing.cargo || "") : (phoneOwner || "")
+  };
+  // Editar = borrar la versión vieja y agregar la nueva con el mismo ID.
+  const old = editing;
+  gastos = gastos.filter(g => !old || !sameId(g.id, old.id));
+  gastos.push(entry);
+  saveLocalCache();
+  closeForm();
+  renderAll();
+  if (old) queueChange("delete", { id: old.id });
+  queueChange("add", { gasto: entry });
+}
+
+// ---------- Lápiz: editar / eliminar ----------
+
+function openActions(id) {
+  const g = gastos.find(x => sameId(x.id, id));
+  if (!g) return;
+  const sheet = document.getElementById("actionsSheet");
+  const desc = g.tipo === "pago"
+    ? "el pago de " + escapeHtml(g.pago) + " a " + escapeHtml((g.participantes || [])[0] || "")
+    : "“" + escapeHtml(g.descripcion || g.categoria) + "”";
+  sheet.innerHTML = "<h3>¿Qué querés hacer?</h3>" +
+    '<button class="menu-btn" id="actEdit">Editar</button>' +
+    '<button class="menu-btn danger" id="actDelete">Eliminar</button>' +
+    '<button class="menu-btn" id="actCancel">Cancelar</button>';
+  document.getElementById("actEdit").onclick = () => { closeActions(); openForm(g.tipo, g); };
+  document.getElementById("actCancel").onclick = closeActions;
+  document.getElementById("actDelete").onclick = () => {
+    sheet.innerHTML = "<h3>¿Estás seguro?</h3>" +
+      '<div class="confirm-text">Vas a eliminar ' + desc + " de " + fmtCur(g.monto, g.moneda) + " del " + escapeHtml(dayLabel(g.fecha)) + ". Se borra para los tres.</div>" +
+      '<div class="sheet-actions"><button class="btn-cancel" id="delNo">No, volver</button><button class="btn-danger" id="delYes">Sí, eliminar</button></div>';
+    document.getElementById("delNo").onclick = closeActions;
+    document.getElementById("delYes").onclick = () => {
+      gastos = gastos.filter(x => !sameId(x.id, g.id));
+      saveLocalCache();
+      closeActions();
+      renderAll();
+      queueChange("delete", { id: g.id });
+    };
+  };
+  document.getElementById("actionsOverlay").classList.add("open");
+}
+
+function closeActions() {
+  document.getElementById("actionsOverlay").classList.remove("open");
+}
+
+// ---------- Eventos ----------
+
+document.querySelectorAll("nav button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const tab = btn.getAttribute("data-tab");
+    document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b === btn));
+    document.querySelectorAll(".tab").forEach(s => s.classList.toggle("active", s.id === "tab-" + tab));
+    window.scrollTo(0, 0);
+  });
+});
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-edit]");
+  if (btn) openActions(btn.getAttribute("data-edit"));
+});
+
+document.getElementById("openExpense").addEventListener("click", () => openForm("gasto"));
+document.getElementById("openPayment").addEventListener("click", () => openForm("pago"));
+document.getElementById("cancelBtn").addEventListener("click", closeForm);
+document.getElementById("saveBtn").addEventListener("click", saveForm);
+document.getElementById("formOverlay").addEventListener("click", (e) => { if (e.target.id === "formOverlay") closeForm(); });
+document.getElementById("actionsOverlay").addEventListener("click", (e) => { if (e.target.id === "actionsOverlay") closeActions(); });
+
+document.querySelectorAll("#currencySeg button").forEach(b => b.addEventListener("click", () => {
+  fCurrency = b.getAttribute("data-cur");
+  renderForm();
+}));
+document.getElementById("fAmount").addEventListener("input", (e) => { formatNumberInput(e.target, e, 2); updateHints(); });
+document.getElementById("fRate").addEventListener("input", (e) => { formatNumberInput(e.target, e, 4); updateHints(); });
+
+function setPhoneOwner(v) {
+  phoneOwner = v;
+  try { localStorage.setItem(PERSON_KEY, v); } catch (e) {}
+  renderConfig();
+}
+document.getElementById("phoneOwner").addEventListener("change", (e) => setPhoneOwner(e.target.value));
+document.getElementById("whoChips").innerHTML = chipsHtml(PEOPLE, () => false, "data-who");
+document.querySelectorAll("[data-who]").forEach(btn => btn.addEventListener("click", () => {
+  setPhoneOwner(btn.getAttribute("data-who"));
+  document.getElementById("whoOverlay").classList.remove("open");
+}));
+
+async function start() {
+  loadLocalCache();
+  applyOutboxLocally();
+  renderConfig();
+  renderAll();
+  if (!phoneOwner) document.getElementById("whoOverlay").classList.add("open");
+  await syncNow();
+  // Lee la planilla cada 2 minutos y reintenta los pendientes cada 30 segundos.
+  setInterval(fetchAllFromSheet, 120000);
+  setInterval(flushOutbox, 30000);
+  window.addEventListener("online", syncNow);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") syncNow();
+  });
+}
+start();
+</script>
+</body>
+</html>
