@@ -123,7 +123,7 @@
   .amount-row { display: flex; gap: 8px; }
   .amount-row input { flex: 1; font-size: 24px !important; font-weight: 700; }
   .seg { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-  .seg button { border: none; background: #fff; padding: 0 14px; font-size: 15px; font-weight: 700; color: var(--ink-soft); }
+  .seg button { border: none; background: #fff; padding: 0 10px; font-size: 15px; font-weight: 700; color: var(--ink-soft); }
   .seg button.sel { background: var(--sea); color: #fff; }
   .rate-row { display: flex; align-items: center; gap: 8px; font-size: 15px; }
   .rate-row input { width: 110px !important; }
@@ -187,13 +187,7 @@
       <div id="settlements"></div>
     </div>
 
-    <div class="card" id="usdCard" style="display:none">
-      <h2>En dólares, sin tipo de cambio</h2>
-      <div class="usd-note">Gastos en dólares que todavía no tienen tipo de cambio. Cuando se lo pongas (lápiz → Editar), pasan a reales.</div>
-      <div id="balancesUSD"></div>
-      <h2 style="margin-top:14px">Para quedar a mano en dólares</h2>
-      <div id="settlementsUSD"></div>
-    </div>
+    <div id="pendingCards"></div>
 
     <div class="day-label">Últimos movimientos</div>
     <div id="recentList"></div>
@@ -256,13 +250,14 @@
         <div class="seg" id="currencySeg">
           <button data-cur="BRL" class="sel">R$</button>
           <button data-cur="USD">US$</button>
+          <button data-cur="ARS">AR$</button>
         </div>
       </div>
     </div>
 
     <div class="field" id="rateField" style="display:none">
       <label>Tipo de cambio (opcional)</label>
-      <div class="rate-row">1 US$ = <input id="fRate" type="text" inputmode="decimal" placeholder="0,00" autocomplete="off"> R$</div>
+      <div class="rate-row"><span id="rateBefore">1 US$ =</span> <input id="fRate" type="text" inputmode="decimal" placeholder="0,00" autocomplete="off"> <span id="rateAfter">R$</span></div>
       <div class="hint" id="rateHint"></div>
     </div>
 
@@ -320,7 +315,8 @@ let CATS = DEFAULT_CATS.slice();
 // La planilla vieja (sin categorías) guardaba el cambio vacío como 1, así
 // que hasta que se actualice el Apps Script el cambio sigue siendo obligatorio.
 let scriptAllowsNoRate = false;
-const CUR_SYMBOL = { BRL: "R$", USD: "US$" };
+const CUR_SYMBOL = { BRL: "R$", USD: "US$", ARS: "AR$" };
+const CUR_NAME = { USD: "dólares", ARS: "pesos" };
 
 // La planilla de Google (via Apps Script) es la base de datos real,
 // compartida entre los tres celulares. Su direccion viene en el link de
@@ -587,15 +583,25 @@ function escapeHtml(str) {
 
 // ---------- Cuentas ----------
 
-function inBRL(g) {
-  return (Number(g.monto) || 0) * (g.moneda === "BRL" ? 1 : (Number(g.cambio) || 0));
+// El cambio se guarda como se dice: en dólares, reales por 1 dólar; en
+// pesos, pesos por 1 real.
+function toBRL(monto, moneda, cambio) {
+  monto = Number(monto) || 0;
+  cambio = Number(cambio) || 0;
+  if (moneda === "BRL") return monto;
+  if (!(cambio > 0)) return 0;
+  return moneda === "ARS" ? monto / cambio : monto * cambio;
 }
+function inBRL(g) { return toBRL(g.monto, g.moneda, g.cambio); }
 
-// Un gasto en dólares sin tipo de cambio todavía no se pasa a reales: se
-// lleva aparte, en dólares, hasta que le pongan el cambio.
+// Un gasto en dólares o pesos sin tipo de cambio todavía no se pasa a
+// reales: se lleva aparte, en su moneda, hasta que le pongan el cambio.
 function sinCambio(g) { return g.moneda !== "BRL" && !(Number(g.cambio) > 0); }
-function bucketOf(g) { return sinCambio(g) ? "USD" : "BRL"; }
-function amountIn(g, bucket) { return bucket === "USD" ? (Number(g.monto) || 0) : inBRL(g); }
+function bucketOf(g) { return sinCambio(g) ? g.moneda : "BRL"; }
+function amountIn(g, bucket) { return bucket === "BRL" ? inBRL(g) : (Number(g.monto) || 0); }
+function rateLabel(moneda, cambio) {
+  return moneda === "ARS" ? "1 R$ = AR$ " + fmtNum(cambio, 4) : "1 US$ = R$ " + fmtNum(cambio, 4);
+}
 
 // Puso = lo que pagó en gastos. Consumió = su parte de los gastos en que
 // participó. Los pagos entre nosotros mueven el saldo pero no son gasto.
@@ -672,7 +678,7 @@ function moveHtml(g) {
   }
   const conv = g.moneda === "BRL" ? ""
     : sinCambio(g) ? '<div class="conv pend">Sin tipo de cambio</div>'
-    : '<div class="conv">≈ ' + fmtBRL(inBRL(g)) + " (" + fmtNum(g.cambio, 4) + ")</div>";
+    : '<div class="conv">≈ ' + fmtBRL(inBRL(g)) + "<br>" + rateLabel(g.moneda, g.cambio) + "</div>";
   return '<div class="move' + (isPago ? " pago" : "") + '">' +
     '<div class="main"><div class="title">' + title + '</div><div class="meta">' + meta + "</div></div>" +
     '<div class="right"><div class="amt">' + fmtCur(g.monto, g.moneda) + "</div>" + conv + "</div>" +
@@ -700,17 +706,22 @@ function renderList(containerId, list, emptyText) {
 function renderInicio() {
   const soloGastos = gastos.filter(g => g.tipo !== "pago");
   const total = soloGastos.filter(g => !sinCambio(g)).reduce((s, g) => s + inBRL(g), 0);
-  const pendUSD = soloGastos.filter(sinCambio).reduce((s, g) => s + Number(g.monto), 0);
+  const pend = ["USD", "ARS"].map(c => [c, soloGastos.filter(g => sinCambio(g) && g.moneda === c).reduce((s, g) => s + Number(g.monto), 0)])
+    .filter(x => x[1]).map(x => fmtCur(x[1], x[0]));
   document.getElementById("tripTotal").textContent = fmtBRL(total);
   document.getElementById("tripNote").textContent = soloGastos.length === 0
     ? "Todavía no hay gastos cargados."
     : soloGastos.length + (soloGastos.length === 1 ? " gasto" : " gastos") +
-      (pendUSD ? " · más " + fmtCur(pendUSD, "USD") + " sin tipo de cambio" : "");
+      (pend.length ? " · más " + pend.join(" y ") + " sin tipo de cambio" : "");
 
   renderBalances("BRL", "balances", "settlements", "Están todos a mano 🙌");
-  const hayUSD = gastos.some(sinCambio);
-  document.getElementById("usdCard").style.display = hayUSD ? "block" : "none";
-  if (hayUSD) renderBalances("USD", "balancesUSD", "settlementsUSD", "En dólares están todos a mano.");
+  // Una tarjeta por cada moneda con movimientos sin tipo de cambio.
+  const monedas = ["USD", "ARS"].filter(c => gastos.some(g => sinCambio(g) && g.moneda === c));
+  document.getElementById("pendingCards").innerHTML = monedas.map(c =>
+    '<div class="card"><h2>En ' + CUR_NAME[c] + ', sin tipo de cambio</h2>' +
+    '<div class="usd-note">Gastos en ' + CUR_NAME[c] + ' que todavía no tienen tipo de cambio. Cuando se lo pongas (lápiz → Editar), pasan a reales.</div>' +
+    '<div id="bal' + c + '"></div><h2 style="margin-top:14px">Para quedar a mano en ' + CUR_NAME[c] + '</h2><div id="set' + c + '"></div></div>').join("");
+  monedas.forEach(c => renderBalances(c, "bal" + c, "set" + c, "En " + CUR_NAME[c] + " están todos a mano."));
 
   renderList("recentList", sortedGastos(gastos).slice(0, 5), "Todavía no hay movimientos. Tocá “+ Cargar gasto”.");
 }
@@ -756,11 +767,11 @@ function renderGastos() {
 
   // Por categoría: el total del gasto, o la parte de la persona elegida.
   const tot = {};
-  let pendUSD = 0;
+  const pend = { USD: 0, ARS: 0 };
   list.filter(g => g.tipo !== "pago").forEach(g => {
     const parts = g.participantes || [];
     if (sinCambio(g)) {
-      pendUSD += personFilter ? (parts.includes(personFilter) ? Number(g.monto) / parts.length : 0) : Number(g.monto);
+      pend[g.moneda] += personFilter ? (parts.includes(personFilter) ? Number(g.monto) / parts.length : 0) : Number(g.monto);
       return;
     }
     let v = inBRL(g);
@@ -770,11 +781,12 @@ function renderGastos() {
   document.getElementById("catTitle").textContent = personFilter ? "Lo que consumió " + personFilter + ", por categoría" : "Por categoría";
   const cats = Object.keys(tot).sort((a, c) => tot[c] - tot[a]);
   const sum = cats.reduce((s, k) => s + tot[k], 0);
-  document.getElementById("catTotals").innerHTML = (cats.length === 0 && !pendUSD)
+  const pendTxt = ["USD", "ARS"].filter(c => pend[c]).map(c => fmtCur(pend[c], c)).join(" y ");
+  document.getElementById("catTotals").innerHTML = (cats.length === 0 && !pendTxt)
     ? '<div class="empty">Sin gastos todavía.</div>'
     : cats.map(k => '<div class="cat-row"><span>' + escapeHtml(k) + "</span><b>" + fmtBRL(tot[k]) + "</b></div>").join("") +
       '<div class="cat-row"><b>Total</b><b>' + fmtBRL(sum) + "</b></div>" +
-      (pendUSD ? '<div class="cat-row"><span>Más, sin tipo de cambio</span><b>' + fmtCur(pendUSD, "USD") + "</b></div>" : "");
+      (pendTxt ? '<div class="cat-row"><span>Más, sin tipo de cambio</span><b>' + pendTxt + "</b></div>" : "");
 
   renderList("fullList", sortedGastos(list), "No hay movimientos para mostrar.");
 }
@@ -832,6 +844,8 @@ function renderForm() {
   const isPago = formMode === "pago";
   document.querySelectorAll("#currencySeg button").forEach(b => b.classList.toggle("sel", b.getAttribute("data-cur") === fCurrency));
   document.getElementById("rateField").style.display = fCurrency === "BRL" ? "none" : "block";
+  document.getElementById("rateBefore").textContent = fCurrency === "ARS" ? "1 R$ =" : "1 US$ =";
+  document.getElementById("rateAfter").textContent = fCurrency === "ARS" ? "AR$" : "R$";
 
   document.getElementById("payerChips").innerHTML = chipsHtml(PEOPLE, v => v === fPayer, "data-payer");
   const partOptions = isPago ? PEOPLE.filter(p => p !== fPayer) : PEOPLE;
@@ -854,13 +868,13 @@ function renderForm() {
 function updateHints() {
   const amount = parseNum(document.getElementById("fAmount").value);
   const rate = parseNum(document.getElementById("fRate").value);
-  // Sin tipo de cambio, el gasto en dólares se divide en dólares.
-  const cur = fCurrency === "BRL" || rate > 0 ? "BRL" : "USD";
-  const v = fCurrency === "BRL" ? amount : cur === "BRL" ? amount * rate : amount;
+  // Sin tipo de cambio, el gasto se divide en su moneda.
+  const cur = fCurrency === "BRL" || rate > 0 ? "BRL" : fCurrency;
+  const v = cur === "BRL" ? toBRL(amount, fCurrency, fCurrency === "BRL" ? 1 : rate) : amount;
   const rateHint = document.getElementById("rateHint");
   rateHint.textContent = fCurrency !== "BRL" && rate > 0 && amount > 0
-    ? "≈ " + fmtBRL(amount * rate)
-    : "Si todavía no sabés el cambio, dejalo vacío: queda en dólares y lo ponés después con el lápiz.";
+    ? "≈ " + fmtBRL(v)
+    : "Si todavía no sabés el cambio, dejalo vacío: queda en " + (CUR_NAME[fCurrency] || "") + " y lo ponés después con el lápiz.";
   const hint = document.getElementById("splitHint");
   if (formMode === "pago" || fParts.length === 0 || !(v > 0)) { hint.textContent = ""; return; }
   hint.textContent = fParts.length === 1 ? "Todo para " + fParts[0] + ": " + fmtCur(v, cur) : "Se divide en " + fParts.length + ": " + fmtCur(v / fParts.length, cur) + " cada uno";

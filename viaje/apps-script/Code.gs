@@ -101,7 +101,8 @@ function gastoToRow_(g) {
   return [
     String(g.id), String(g.fecha || ""), String(g.tipo || "gasto"),
     String(g.descripcion || ""), String(g.categoria || ""), String(g.moneda || "BRL"),
-    monto, cambio, cambio === "" ? "" : Math.round(monto * cambio * 100) / 100,
+    // En pesos el cambio es pesos por 1 real; en dolares, reales por 1 dolar.
+    monto, cambio, cambio === "" ? "" : Math.round((g.moneda === "ARS" ? monto / cambio : monto * cambio) * 100) / 100,
     String(g.pago || ""), (g.participantes || []).join(", "), String(g.cargo || "")
   ];
 }

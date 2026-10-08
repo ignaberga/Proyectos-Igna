@@ -23,14 +23,16 @@ Apps Script, cola de pendientes para cargar sin señal y link de instalación
 - Personas fijas: `Gastón`, `David`, `Ignacio` (constante `PEOPLE`). En el
   link de instalación `quien` va sin tilde (`Gaston`).
 - Cada movimiento: `id, fecha, tipo ("gasto" | "pago"), descripcion,
-  categoria, moneda ("BRL" | "USD"), monto, cambio (reales por 1 dólar; 1 si
-  es BRL), pago (quién pagó), participantes (array), cargo`.
+  categoria, moneda ("BRL" | "USD" | "ARS"), monto, cambio, pago (quién
+  pagó), participantes (array), cargo`.
+- `cambio` se guarda como se dice: en USD, reales por 1 dólar; en ARS, **pesos
+  por 1 real** (se divide); en BRL, 1. Pesos para gastos de antes de salir.
 - Un gasto se divide en partes iguales entre `participantes`. Un `pago` es una
   transferencia entre dos: `pago` le paga a `participantes[0]`.
 - Saldos y estado de cuenta en reales. El tipo de cambio de un gasto en
-  dólares es **opcional** (Ignacio lo pone después, con el cambio del cierre
+  dólares o pesos es **opcional** (Ignacio lo pone después, con el cambio del cierre
   de la tarjeta): sin cambio queda `cambio: 0` y ese gasto se lleva aparte,
-  con su propio estado de cuenta en dólares, hasta que se lo pongan con el
+  con su propio estado de cuenta en su moneda, hasta que se lo pongan con el
   lápiz → Editar. No se precarga ningún cambio.
 - Categorías configurables desde Config (lista desplegable en el formulario),
   compartidas por la planilla (hoja `Config`, filas `categorias | valor`).
