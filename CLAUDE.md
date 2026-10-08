@@ -27,11 +27,18 @@ Apps Script, cola de pendientes para cargar sin señal y link de instalación
   es BRL), pago (quién pagó), participantes (array), cargo`.
 - Un gasto se divide en partes iguales entre `participantes`. Un `pago` es una
   transferencia entre dos: `pago` le paga a `participantes[0]`.
-- Saldos y estado de cuenta siempre en reales. El tipo de cambio va en cada
-  gasto en dólares y se precarga el último usado.
-- Acciones al Apps Script: `GET ?action=get_all` → `{gastos:[...]}`;
-  `POST add` y `delete` (repetibles sin duplicar). Editar = `delete` + `add`
-  con el mismo ID.
+- Saldos y estado de cuenta en reales. El tipo de cambio de un gasto en
+  dólares es **opcional** (Ignacio lo pone después, con el cambio del cierre
+  de la tarjeta): sin cambio queda `cambio: 0` y ese gasto se lleva aparte,
+  con su propio estado de cuenta en dólares, hasta que se lo pongan con el
+  lápiz → Editar. No se precarga ningún cambio.
+- Categorías configurables desde Config (lista desplegable en el formulario),
+  compartidas por la planilla (hoja `Config`, filas `categorias | valor`).
+- Acciones al Apps Script: `GET ?action=get_all` → `{gastos:[...],
+  categorias:[...]}`; `POST add`, `delete`, `config_add` y `config_remove`
+  (repetibles sin duplicar). Editar = `delete` + `add` con el mismo ID.
+- Si la planilla no devuelve `categorias` es un Apps Script viejo, que guarda
+  el cambio vacío como 1: en ese caso la app exige el tipo de cambio.
 - Claves de `localStorage` con prefijo `viaje_`.
 
 ## Reglas firmes

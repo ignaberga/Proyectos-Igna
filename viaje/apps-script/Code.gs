@@ -3,7 +3,8 @@
 // ============================================================
 // Que hace: convierte esta planilla en la base de datos compartida de
 // la app del viaje. La app le pide los datos (doGet) y le manda altas
-// y bajas (doPost). Crea sola la hoja "Gastos" la primera vez.
+// y bajas (doPost). Crea solas las hojas "Gastos" y "Config" la primera
+// vez, con las categorias por defecto.
 //
 // Este archivo es una copia de respaldo: el que funciona de verdad es
 // el que esta pegado dentro de la planilla. La direccion /exec NUNCA
@@ -27,7 +28,28 @@
 // ============================================================
 
 const SHEET_GASTOS = "Gastos";
+const SHEET_CONFIG = "Config";
 const HEADERS = ["ID","Fecha","Tipo","Descripcion","Categoria","Moneda","Monto","Cambio","MontoReales","Pago","Participantes","Cargo"];
+const CONFIG_HEADERS = ["Tipo","Valor"];
+const DEFAULT_CATEGORIAS = ["Hospedaje","Movilidad","Comida","Supermercado","Salidas","Excursiones","Compras","Otros"];
+
+function getConfigSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(SHEET_CONFIG);
+  if (!sh) {
+    sh = ss.insertSheet(SHEET_CONFIG);
+    sh.appendRow(CONFIG_HEADERS);
+    DEFAULT_CATEGORIAS.forEach(function (c) { sh.appendRow(["categorias", c]); });
+  }
+  return sh;
+}
+
+function readCategorias_() {
+  const rows = getConfigSheet_().getDataRange().getValues().slice(1);
+  const out = rows.filter(function (r) { return r[0] === "categorias" && r[1] !== ""; })
+    .map(function (r) { return String(r[1]); });
+  return out.length ? out : DEFAULT_CATEGORIAS;
+}
 
 function getSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -63,7 +85,9 @@ function readGastos_() {
       categoria: String(r[4] || ""),
       moneda: String(r[5] || "BRL"),
       monto: Number(r[6]) || 0,
-      cambio: Number(r[7]) || 1,
+      // Un gasto en dolares puede quedar sin tipo de cambio (0) hasta que
+      // se lo pongan desde la app.
+      cambio: String(r[5] || "BRL") === "BRL" ? 1 : (Number(r[7]) || 0),
       pago: String(r[9] || ""),
       participantes: String(r[10] || "").split(",").map(function (s) { return s.trim(); }).filter(String),
       cargo: String(r[11] || "")
@@ -73,11 +97,11 @@ function readGastos_() {
 
 function gastoToRow_(g) {
   const monto = Number(g.monto) || 0;
-  const cambio = g.moneda === "BRL" ? 1 : (Number(g.cambio) || 1);
+  const cambio = g.moneda === "BRL" ? 1 : (Number(g.cambio) > 0 ? Number(g.cambio) : "");
   return [
     String(g.id), String(g.fecha || ""), String(g.tipo || "gasto"),
     String(g.descripcion || ""), String(g.categoria || ""), String(g.moneda || "BRL"),
-    monto, cambio, Math.round(monto * cambio * 100) / 100,
+    monto, cambio, cambio === "" ? "" : Math.round(monto * cambio * 100) / 100,
     String(g.pago || ""), (g.participantes || []).join(", "), String(g.cargo || "")
   ];
 }
@@ -96,7 +120,7 @@ function jsonOut_(obj) {
 
 function doGet(e) {
   const action = (e && e.parameter && e.parameter.action) || "get_all";
-  if (action === "get_all") return jsonOut_({ gastos: readGastos_() });
+  if (action === "get_all") return jsonOut_({ gastos: readGastos_(), categorias: readCategorias_() });
   return jsonOut_({ error: "accion desconocida" });
 }
 
@@ -125,6 +149,15 @@ function doPost(e) {
     } else if (body.action === "delete") {
       const r = findRowById_(sh, body.id);
       if (r > 0) sh.deleteRow(r);
+    } else if (body.action === "config_add" || body.action === "config_remove") {
+      const cs = getConfigSheet_();
+      const data = cs.getDataRange().getValues();
+      let found = -1;
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][0]) === String(body.list) && String(data[i][1]) === String(body.value)) { found = i + 1; break; }
+      }
+      if (body.action === "config_add" && found < 0) cs.appendRow([body.list, body.value]);
+      if (body.action === "config_remove" && found > 0) cs.deleteRow(found);
     } else {
       return jsonOut_({ ok: false, error: "accion desconocida" });
     }

@@ -82,7 +82,7 @@
   .settle { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 14px; }
   .settle .txt { flex: 1; line-height: 1.9; }
   .settle:first-of-type { border-top: none; padding-top: 0; }
-  .settle .amt { font-weight: 700; }
+  .settle .amt { font-weight: 700; white-space: nowrap; }
   .settle button { flex-shrink: 0; border: 1px solid var(--line); background: var(--bg); border-radius: 10px; padding: 7px 10px; font-size: 12px; font-weight: 600; color: var(--sea-dark); }
   .empty { color: var(--ink-soft); font-size: 14px; text-align: center; padding: 8px 0; }
 
@@ -142,6 +142,14 @@
   .who-sheet .chips { flex-direction: column; }
   .who-sheet .chip { padding: 15px; font-size: 17px; text-align: center; }
 
+  .move .conv.pend { color: var(--sun); font-weight: 600; }
+  .usd-note { font-size: 12px; color: var(--ink-soft); margin: -4px 0 10px; line-height: 1.4; }
+  .cfg-item { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-top: 1px solid var(--line); font-size: 15px; }
+  .cfg-item:first-child { border-top: none; }
+  .cfg-item button { border: none; background: var(--red-bg); color: var(--red); border-radius: 8px; padding: 6px 10px; font-size: 13px; font-weight: 600; }
+  .cfg-add { display: flex; gap: 8px; margin-top: 10px; }
+  .cfg-add input { flex: 1; padding: 11px; font-size: 16px; border: 1px solid var(--line); border-radius: 10px; font-family: inherit; }
+  .cfg-add button { border: none; background: var(--sea); color: #fff; border-radius: 10px; padding: 0 16px; font-size: 15px; font-weight: 700; }
   .link-state { font-size: 14px; font-weight: 600; }
   .link-state.ok { color: var(--green); }
   .link-state.no { color: var(--red); }
@@ -179,6 +187,14 @@
       <div id="settlements"></div>
     </div>
 
+    <div class="card" id="usdCard" style="display:none">
+      <h2>En dólares, sin tipo de cambio</h2>
+      <div class="usd-note">Gastos en dólares que todavía no tienen tipo de cambio. Cuando se lo pongas (lápiz → Editar), pasan a reales.</div>
+      <div id="balancesUSD"></div>
+      <h2 style="margin-top:14px">Para quedar a mano en dólares</h2>
+      <div id="settlementsUSD"></div>
+    </div>
+
     <div class="day-label">Últimos movimientos</div>
     <div id="recentList"></div>
   </section>
@@ -201,6 +217,15 @@
         <select id="phoneOwner"></select>
       </div>
       <div class="hint">Se usa para precargar "¿Quién pagó?" al cargar un gasto.</div>
+    </div>
+    <div class="card">
+      <h2>Categorías</h2>
+      <div id="catConfig"></div>
+      <div class="cfg-add">
+        <input id="newCat" type="text" placeholder="Nueva categoría" autocomplete="off">
+        <button id="addCat">Agregar</button>
+      </div>
+      <div class="hint">Las categorías son las mismas en los tres celulares.</div>
     </div>
     <div class="card">
       <h2>Planilla de Google</h2>
@@ -236,7 +261,7 @@
     </div>
 
     <div class="field" id="rateField" style="display:none">
-      <label>Tipo de cambio</label>
+      <label>Tipo de cambio (opcional)</label>
       <div class="rate-row">1 US$ = <input id="fRate" type="text" inputmode="decimal" placeholder="0,00" autocomplete="off"> R$</div>
       <div class="hint" id="rateHint"></div>
     </div>
@@ -248,7 +273,7 @@
 
     <div class="field" id="catField">
       <label>Categoría</label>
-      <div class="chips" id="catChips"></div>
+      <select id="fCategory"></select>
     </div>
 
     <div class="field">
@@ -290,7 +315,11 @@
 
 <script>
 const PEOPLE = ["Gastón", "David", "Ignacio"];
-const CATEGORIES = ["Hospedaje", "Movilidad", "Comida", "Supermercado", "Salidas", "Excursiones", "Compras", "Otros"];
+const DEFAULT_CATS = ["Hospedaje", "Movilidad", "Comida", "Supermercado", "Salidas", "Excursiones", "Compras", "Otros"];
+let CATS = DEFAULT_CATS.slice();
+// La planilla vieja (sin categorías) guardaba el cambio vacío como 1, así
+// que hasta que se actualice el Apps Script el cambio sigue siendo obligatorio.
+let scriptAllowsNoRate = false;
 const CUR_SYMBOL = { BRL: "R$", USD: "US$" };
 
 // La planilla de Google (via Apps Script) es la base de datos real,
@@ -347,10 +376,12 @@ function loadLocalCache() {
   try {
     const parsed = JSON.parse(localStorage.getItem(LOCAL_CACHE_KEY) || "{}");
     if (Array.isArray(parsed.gastos)) gastos = parsed.gastos;
+    if (Array.isArray(parsed.categorias) && parsed.categorias.length) CATS = parsed.categorias;
+    scriptAllowsNoRate = !!parsed.scriptAllowsNoRate;
   } catch (e) {}
 }
 function saveLocalCache() {
-  try { localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify({ gastos: gastos })); } catch (e) {}
+  try { localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify({ gastos: gastos, categorias: CATS, scriptAllowsNoRate: scriptAllowsNoRate })); } catch (e) {}
 }
 
 // Cambios que todavia no llegaron a la planilla. Quedan guardados en el
@@ -377,6 +408,9 @@ function sameId(a, b) { return String(a) === String(b); }
 function isApplied(op, data) {
   if (op.action === "add") return data.gastos.some(g => sameId(g.id, op.payload.gasto.id));
   if (op.action === "delete") return !data.gastos.some(g => sameId(g.id, op.payload.id));
+  if (!Array.isArray(data.categorias)) return false;
+  if (op.action === "config_add") return data.categorias.includes(op.payload.value);
+  if (op.action === "config_remove") return !data.categorias.includes(op.payload.value);
   return false;
 }
 
@@ -387,6 +421,10 @@ function applyOutboxLocally() {
       gastos.push(op.payload.gasto);
     } else if (op.action === "delete") {
       gastos = gastos.filter(g => !sameId(g.id, op.payload.id));
+    } else if (op.action === "config_add") {
+      if (!CATS.includes(op.payload.value)) CATS = CATS.concat([op.payload.value]);
+    } else if (op.action === "config_remove") {
+      CATS = CATS.filter(c => c !== op.payload.value);
     }
   });
 }
@@ -439,6 +477,9 @@ async function fetchAllFromSheet() {
     while (outbox.length > 0 && isApplied(outbox[0], data)) outbox.shift();
     saveOutbox();
     gastos = data.gastos;
+    // Las categorías solo se reemplazan si la planilla las trae.
+    scriptAllowsNoRate = Array.isArray(data.categorias);
+    if (scriptAllowsNoRate && data.categorias.length) CATS = data.categorias;
     applyOutboxLocally();
     saveLocalCache();
     syncProblem = "";
@@ -550,13 +591,20 @@ function inBRL(g) {
   return (Number(g.monto) || 0) * (g.moneda === "BRL" ? 1 : (Number(g.cambio) || 0));
 }
 
+// Un gasto en dólares sin tipo de cambio todavía no se pasa a reales: se
+// lleva aparte, en dólares, hasta que le pongan el cambio.
+function sinCambio(g) { return g.moneda !== "BRL" && !(Number(g.cambio) > 0); }
+function bucketOf(g) { return sinCambio(g) ? "USD" : "BRL"; }
+function amountIn(g, bucket) { return bucket === "USD" ? (Number(g.monto) || 0) : inBRL(g); }
+
 // Puso = lo que pagó en gastos. Consumió = su parte de los gastos en que
 // participó. Los pagos entre nosotros mueven el saldo pero no son gasto.
-function computeBalances() {
+function computeBalances(bucket) {
   const b = {};
   PEOPLE.forEach(p => { b[p] = { puso: 0, consumio: 0, envio: 0, recibio: 0 }; });
   gastos.forEach(g => {
-    const total = inBRL(g);
+    if (bucketOf(g) !== bucket) return;
+    const total = amountIn(g, bucket);
     const parts = (g.participantes || []).filter(p => b[p]);
     if (!b[g.pago] || parts.length === 0) return;
     if (g.tipo === "pago") {
@@ -620,10 +668,11 @@ function moveHtml(g) {
   } else {
     const who = parts.length === PEOPLE.length ? "Los 3" : parts.map(escapeHtml).join(" y ");
     meta = (g.descripcion ? escapeHtml(g.categoria) + " · " : "") + "Pagó " + tagHtml(g.pago) +
-      "<br>Se suman: " + who + " · " + fmtBRL(inBRL(g) / (parts.length || 1)) + " c/u";
+      "<br>Se suman: " + who + " · " + fmtCur(amountIn(g, bucketOf(g)) / (parts.length || 1), bucketOf(g)) + " c/u";
   }
-  const conv = g.moneda !== "BRL"
-    ? '<div class="conv">≈ ' + fmtBRL(inBRL(g)) + " (" + fmtNum(g.cambio, 4) + ")</div>" : "";
+  const conv = g.moneda === "BRL" ? ""
+    : sinCambio(g) ? '<div class="conv pend">Sin tipo de cambio</div>'
+    : '<div class="conv">≈ ' + fmtBRL(inBRL(g)) + " (" + fmtNum(g.cambio, 4) + ")</div>";
   return '<div class="move' + (isPago ? " pago" : "") + '">' +
     '<div class="main"><div class="title">' + title + '</div><div class="meta">' + meta + "</div></div>" +
     '<div class="right"><div class="amt">' + fmtCur(g.monto, g.moneda) + "</div>" + conv + "</div>" +
@@ -650,39 +699,47 @@ function renderList(containerId, list, emptyText) {
 
 function renderInicio() {
   const soloGastos = gastos.filter(g => g.tipo !== "pago");
-  const total = soloGastos.reduce((s, g) => s + inBRL(g), 0);
+  const total = soloGastos.filter(g => !sinCambio(g)).reduce((s, g) => s + inBRL(g), 0);
+  const pendUSD = soloGastos.filter(sinCambio).reduce((s, g) => s + Number(g.monto), 0);
   document.getElementById("tripTotal").textContent = fmtBRL(total);
-  const usd = soloGastos.filter(g => g.moneda === "USD");
   document.getElementById("tripNote").textContent = soloGastos.length === 0
     ? "Todavía no hay gastos cargados."
     : soloGastos.length + (soloGastos.length === 1 ? " gasto" : " gastos") +
-      (usd.length ? " · incluye " + fmtCur(usd.reduce((s, g) => s + Number(g.monto), 0), "USD") + " pasados a reales" : "");
+      (pendUSD ? " · más " + fmtCur(pendUSD, "USD") + " sin tipo de cambio" : "");
 
-  const b = computeBalances();
-  document.getElementById("balances").innerHTML = PEOPLE.map(p => {
+  renderBalances("BRL", "balances", "settlements", "Están todos a mano 🙌");
+  const hayUSD = gastos.some(sinCambio);
+  document.getElementById("usdCard").style.display = hayUSD ? "block" : "none";
+  if (hayUSD) renderBalances("USD", "balancesUSD", "settlementsUSD", "En dólares están todos a mano.");
+
+  renderList("recentList", sortedGastos(gastos).slice(0, 5), "Todavía no hay movimientos. Tocá “+ Cargar gasto”.");
+}
+
+function renderBalances(cur, balId, setId, emptyText) {
+  const b = computeBalances(cur);
+  document.getElementById(balId).innerHTML = PEOPLE.map(p => {
     const x = b[p];
     const cls = x.saldo > 0.009 ? "pos" : x.saldo < -0.009 ? "neg" : "zero";
     const lbl = cls === "pos" ? "le deben" : cls === "neg" ? "debe" : "está a mano";
     const pagos = (x.envio || x.recibio)
-      ? "<span>Pagos: <b>" + fmtBRL(x.envio - x.recibio) + "</b></span>" : "";
+      ? "<span>Pagos: <b>" + fmtCur(x.envio - x.recibio, cur) + "</b></span>" : "";
     return '<div class="person-row"><div class="person-top">' + tagHtml(p) +
-      '<div class="saldo ' + cls + '">' + (cls === "zero" ? "" : fmtBRL(Math.abs(x.saldo))) + "<small>" + lbl + "</small></div></div>" +
-      '<div class="person-detail"><span>Puso: <b>' + fmtBRL(x.puso) + "</b></span><span>Consumió: <b>" + fmtBRL(x.consumio) + "</b></span>" + pagos + "</div></div>";
+      '<div class="saldo ' + cls + '">' + (cls === "zero" ? "" : fmtCur(Math.abs(x.saldo), cur)) + "<small>" + lbl + "</small></div></div>" +
+      '<div class="person-detail"><span>Puso: <b>' + fmtCur(x.puso, cur) + "</b></span><span>Consumió: <b>" + fmtCur(x.consumio, cur) + "</b></span>" + pagos + "</div></div>";
   }).join("");
 
   const s = computeSettlements(b);
-  document.getElementById("settlements").innerHTML = s.length === 0
-    ? '<div class="empty">Están todos a mano 🙌</div>'
+  const el = document.getElementById(setId);
+  el.innerHTML = s.length === 0
+    ? '<div class="empty">' + emptyText + "</div>"
     : s.map((t, i) => '<div class="settle"><div class="txt">' + tagHtml(t.from) + " le paga a " + tagHtml(t.to) +
-        ' <span class="amt">' + fmtBRL(t.v) + '</span></div><button data-settle="' + i + '">Ya pagó</button></div>').join("");
-  document.querySelectorAll("[data-settle]").forEach(btn => {
+        ' <span class="amt">' + fmtCur(t.v, cur) + '</span></div><button data-settle="' + i + '">Ya pagó</button></div>').join("");
+  el.querySelectorAll("[data-settle]").forEach(btn => {
     btn.addEventListener("click", () => {
       const t = s[Number(btn.getAttribute("data-settle"))];
-      openForm("pago", null, { pago: t.from, para: t.to, monto: t.v });
+      openForm("pago", null, { pago: t.from, para: t.to, monto: t.v, moneda: cur });
     });
   });
-
-  renderList("recentList", sortedGastos(gastos).slice(0, 5), "Todavía no hay movimientos. Tocá “+ Cargar gasto”.");
 }
 
 let personFilter = "";
@@ -699,8 +756,13 @@ function renderGastos() {
 
   // Por categoría: el total del gasto, o la parte de la persona elegida.
   const tot = {};
+  let pendUSD = 0;
   list.filter(g => g.tipo !== "pago").forEach(g => {
     const parts = g.participantes || [];
+    if (sinCambio(g)) {
+      pendUSD += personFilter ? (parts.includes(personFilter) ? Number(g.monto) / parts.length : 0) : Number(g.monto);
+      return;
+    }
     let v = inBRL(g);
     if (personFilter) v = parts.includes(personFilter) ? v / parts.length : 0;
     if (v) tot[g.categoria || "Otros"] = (tot[g.categoria || "Otros"] || 0) + v;
@@ -708,10 +770,11 @@ function renderGastos() {
   document.getElementById("catTitle").textContent = personFilter ? "Lo que consumió " + personFilter + ", por categoría" : "Por categoría";
   const cats = Object.keys(tot).sort((a, c) => tot[c] - tot[a]);
   const sum = cats.reduce((s, k) => s + tot[k], 0);
-  document.getElementById("catTotals").innerHTML = cats.length === 0
+  document.getElementById("catTotals").innerHTML = (cats.length === 0 && !pendUSD)
     ? '<div class="empty">Sin gastos todavía.</div>'
     : cats.map(k => '<div class="cat-row"><span>' + escapeHtml(k) + "</span><b>" + fmtBRL(tot[k]) + "</b></div>").join("") +
-      '<div class="cat-row"><b>Total</b><b>' + fmtBRL(sum) + "</b></div>";
+      '<div class="cat-row"><b>Total</b><b>' + fmtBRL(sum) + "</b></div>" +
+      (pendUSD ? '<div class="cat-row"><span>Más, sin tipo de cambio</span><b>' + fmtCur(pendUSD, "USD") + "</b></div>" : "");
 
   renderList("fullList", sortedGastos(list), "No hay movimientos para mostrar.");
 }
@@ -720,9 +783,34 @@ function renderConfig() {
   const sel = document.getElementById("phoneOwner");
   sel.innerHTML = (phoneOwner ? "" : '<option value="">Elegir…</option>') +
     PEOPLE.map(p => '<option' + (p === phoneOwner ? " selected" : "") + ">" + p + "</option>").join("");
+  document.getElementById("catConfig").innerHTML = CATS.map((c, i) =>
+    '<div class="cfg-item"><span>' + escapeHtml(c) + '</span><button data-delcat="' + i + '">Sacar</button></div>').join("");
+  document.querySelectorAll("[data-delcat]").forEach(btn => btn.addEventListener("click", () => {
+    removeCategory(CATS[Number(btn.getAttribute("data-delcat"))]);
+  }));
+}
+
+function addCategory(name) {
+  name = String(name || "").trim();
+  if (!name) return;
+  if (CATS.some(c => plain(c) === plain(name))) { alert("Esa categoría ya existe."); return; }
+  CATS = CATS.concat([name]);
+  saveLocalCache();
+  renderConfig();
+  queueChange("config_add", { list: "categorias", value: name });
+}
+
+function removeCategory(name) {
+  if (CATS.length <= 1) { alert("Tiene que quedar al menos una categoría."); return; }
+  if (!confirm("¿Sacar la categoría “" + name + "”? Los gastos que ya la tienen no cambian.")) return;
+  CATS = CATS.filter(c => c !== name);
+  saveLocalCache();
+  renderConfig();
+  queueChange("config_remove", { list: "categorias", value: name });
 }
 
 function renderAll() {
+  renderConfig();
   renderInicio();
   renderGastos();
   renderSyncState();
@@ -733,7 +821,6 @@ function renderAll() {
 let formMode = "gasto";
 let editing = null;
 let fCurrency = "BRL";
-let fCategory = CATEGORIES[0];
 let fPayer = "";
 let fParts = [];
 
@@ -741,22 +828,15 @@ function chipsHtml(items, isSel, attr) {
   return items.map(v => '<button type="button" class="chip' + (isSel(v) ? " sel" : "") + '" ' + attr + '="' + escapeHtml(v) + '">' + escapeHtml(v) + "</button>").join("");
 }
 
-function lastRate() {
-  const usd = sortedGastos(gastos.filter(g => g.moneda === "USD" && Number(g.cambio) > 0));
-  return usd.length ? Number(usd[0].cambio) : 0;
-}
-
 function renderForm() {
   const isPago = formMode === "pago";
   document.querySelectorAll("#currencySeg button").forEach(b => b.classList.toggle("sel", b.getAttribute("data-cur") === fCurrency));
   document.getElementById("rateField").style.display = fCurrency === "BRL" ? "none" : "block";
 
-  document.getElementById("catChips").innerHTML = chipsHtml(CATEGORIES, v => v === fCategory, "data-cat");
   document.getElementById("payerChips").innerHTML = chipsHtml(PEOPLE, v => v === fPayer, "data-payer");
   const partOptions = isPago ? PEOPLE.filter(p => p !== fPayer) : PEOPLE;
   document.getElementById("partChips").innerHTML = chipsHtml(partOptions, v => fParts.includes(v), "data-part");
 
-  document.querySelectorAll("[data-cat]").forEach(b => b.addEventListener("click", () => { fCategory = b.getAttribute("data-cat"); renderForm(); }));
   document.querySelectorAll("[data-payer]").forEach(b => b.addEventListener("click", () => {
     fPayer = b.getAttribute("data-payer");
     if (isPago) fParts = fParts.filter(p => p !== fPayer);
@@ -774,12 +854,24 @@ function renderForm() {
 function updateHints() {
   const amount = parseNum(document.getElementById("fAmount").value);
   const rate = parseNum(document.getElementById("fRate").value);
-  const brl = fCurrency === "BRL" ? amount : amount * rate;
+  // Sin tipo de cambio, el gasto en dólares se divide en dólares.
+  const cur = fCurrency === "BRL" || rate > 0 ? "BRL" : "USD";
+  const v = fCurrency === "BRL" ? amount : cur === "BRL" ? amount * rate : amount;
   const rateHint = document.getElementById("rateHint");
-  rateHint.textContent = fCurrency !== "BRL" && brl > 0 ? "≈ " + fmtBRL(brl) : "Cuántos reales vale 1 dólar. Se precarga el último que usaron.";
+  rateHint.textContent = fCurrency !== "BRL" && rate > 0 && amount > 0
+    ? "≈ " + fmtBRL(amount * rate)
+    : "Si todavía no sabés el cambio, dejalo vacío: queda en dólares y lo ponés después con el lápiz.";
   const hint = document.getElementById("splitHint");
-  if (formMode === "pago" || fParts.length === 0 || !(brl > 0)) { hint.textContent = ""; return; }
-  hint.textContent = fParts.length === 1 ? "Todo para " + fParts[0] + ": " + fmtBRL(brl) : "Se divide en " + fParts.length + ": " + fmtBRL(brl / fParts.length) + " cada uno";
+  if (formMode === "pago" || fParts.length === 0 || !(v > 0)) { hint.textContent = ""; return; }
+  hint.textContent = fParts.length === 1 ? "Todo para " + fParts[0] + ": " + fmtCur(v, cur) : "Se divide en " + fParts.length + ": " + fmtCur(v / fParts.length, cur) + " cada uno";
+}
+
+// Lista de categorías; si el gasto tiene una que ya se sacó, se muestra igual.
+function fillCategorySelect(value) {
+  const opts = CATS.includes(value) || !value ? CATS : CATS.concat([value]);
+  const sel = document.getElementById("fCategory");
+  sel.innerHTML = opts.map(c => "<option>" + escapeHtml(c) + "</option>").join("");
+  sel.value = value && opts.includes(value) ? value : opts[0];
 }
 
 function openForm(mode, g, preset) {
@@ -796,21 +888,20 @@ function openForm(mode, g, preset) {
 
   if (g) {
     fCurrency = g.moneda || "BRL";
-    fCategory = g.categoria || CATEGORIES[0];
+    fillCategorySelect(g.categoria);
     fPayer = g.pago;
     fParts = (g.participantes || []).slice();
     document.getElementById("fAmount").value = fmtNum(g.monto, 2);
-    document.getElementById("fRate").value = g.moneda === "BRL" ? "" : fmtNum(g.cambio, 4);
+    document.getElementById("fRate").value = sinCambio(g) || g.moneda === "BRL" ? "" : fmtNum(g.cambio, 4);
     document.getElementById("fDesc").value = g.descripcion || "";
     document.getElementById("fDate").value = g.fecha || todayStr();
   } else {
-    fCurrency = "BRL";
-    fCategory = CATEGORIES[0];
+    fCurrency = (preset && preset.moneda) || "BRL";
+    fillCategorySelect("");
     fPayer = (preset && preset.pago) || phoneOwner || "";
     fParts = isPago ? (preset && preset.para ? [preset.para] : []) : PEOPLE.slice();
     document.getElementById("fAmount").value = preset && preset.monto ? fmtNum(preset.monto, 2) : "";
-    const r = lastRate();
-    document.getElementById("fRate").value = r ? fmtNum(r, 4) : "";
+    document.getElementById("fRate").value = "";
     document.getElementById("fDesc").value = "";
     document.getElementById("fDate").value = todayStr();
   }
@@ -835,8 +926,10 @@ function saveForm() {
   const isPago = formMode === "pago";
   const amount = parseNum(document.getElementById("fAmount").value);
   if (!(amount > 0)) return formError("Poné un monto válido.");
-  const rate = fCurrency === "BRL" ? 1 : parseNum(document.getElementById("fRate").value);
-  if (!(rate > 0)) return formError("Poné el tipo de cambio: cuántos reales vale 1 dólar.");
+  const rateText = document.getElementById("fRate").value.trim();
+  const rate = fCurrency === "BRL" ? 1 : rateText ? parseNum(rateText) : 0;
+  if (fCurrency !== "BRL" && rateText && !(rate > 0)) return formError("El tipo de cambio no es válido. Si no lo sabés, dejalo vacío.");
+  if (fCurrency !== "BRL" && !rate && !scriptAllowsNoRate) return formError("Para dejar el cambio vacío, primero hay que actualizar el Apps Script de la planilla. Avisale a Ignacio.");
   if (!PEOPLE.includes(fPayer)) return formError(isPago ? "Elegí quién paga." : "Elegí quién pagó.");
   if (fParts.length === 0) return formError(isPago ? "Elegí a quién le paga." : "Elegí quiénes se suman al gasto.");
   const fecha = document.getElementById("fDate").value;
@@ -847,7 +940,7 @@ function saveForm() {
     fecha: fecha,
     tipo: formMode,
     descripcion: isPago ? "" : document.getElementById("fDesc").value.trim(),
-    categoria: isPago ? "" : fCategory,
+    categoria: isPago ? "" : document.getElementById("fCategory").value,
     moneda: fCurrency,
     monto: Math.round(amount * 100) / 100,
     cambio: rate,
@@ -930,6 +1023,15 @@ document.querySelectorAll("#currencySeg button").forEach(b => b.addEventListener
 }));
 document.getElementById("fAmount").addEventListener("input", (e) => { formatNumberInput(e.target, e, 2); updateHints(); });
 document.getElementById("fRate").addEventListener("input", (e) => { formatNumberInput(e.target, e, 4); updateHints(); });
+
+document.getElementById("addCat").addEventListener("click", () => {
+  const input = document.getElementById("newCat");
+  addCategory(input.value);
+  input.value = "";
+});
+document.getElementById("newCat").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("addCat").click();
+});
 
 function setPhoneOwner(v) {
   phoneOwner = v;

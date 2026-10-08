@@ -6,11 +6,13 @@ instalación ni servidor.
 
 ## Cómo funciona
 
-- **Cargar gasto:** monto (en reales o dólares), descripción, categoría,
+- **Cargar gasto:** monto (en reales o dólares), descripción, categoría (de
+  una lista que se arma en Config),
   quién pagó y quiénes se suman. El gasto se divide en partes iguales entre
   los que se suman.
-- **Dólares:** se carga el tipo de cambio (cuántos reales vale 1 dólar) en
-  el mismo gasto; se precarga el último usado. Todos los saldos son en reales.
+- **Dólares:** el tipo de cambio es opcional. Si no se pone, el gasto queda en
+  dólares y aparece aparte, en un estado de cuenta en dólares. Cuando se le
+  pone el cambio (lápiz → Editar), pasa a sumarse en reales.
 - **Estado de cuenta:** cuánto puso cada uno, cuánto consumió y el saldo.
   "Para quedar a mano" dice quién le paga a quién con la menor cantidad de
   pagos. Cuando alguien paga, se toca "Ya pagó" y queda registrado.
