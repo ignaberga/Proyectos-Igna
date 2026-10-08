@@ -23,24 +23,24 @@ Apps Script, cola de pendientes para cargar sin señal y link de instalación
 - Personas fijas: `Gastón`, `David`, `Ignacio` (constante `PEOPLE`). En el
   link de instalación `quien` va sin tilde (`Gaston`).
 - Cada movimiento: `id, fecha, tipo ("gasto" | "pago"), descripcion,
-  categoria, moneda ("BRL" | "USD" | "ARS"), monto, cambio, pago (quién
+  categoria, moneda ("ARS" | "BRL" | "USD"), monto, cambio, pago (quién
   pagó), participantes (array), cargo`.
-- `cambio` se guarda como se dice: en USD, reales por 1 dólar; en ARS, **pesos
-  por 1 real** (se divide); en BRL, 1. Pesos para gastos de antes de salir.
 - Un gasto se divide en partes iguales entre `participantes`. Un `pago` es una
   transferencia entre dos: `pago` le paga a `participantes[0]`.
-- Saldos y estado de cuenta en reales. El tipo de cambio de un gasto en
-  dólares o pesos es **opcional** (Ignacio lo pone después, con el cambio del cierre
-  de la tarjeta): sin cambio queda `cambio: 0` y ese gasto se lleva aparte,
-  con su propio estado de cuenta en su moneda, hasta que se lo pongan con el
-  lápiz → Editar. No se precarga ningún cambio.
+- **Moneda base: pesos (ARS).** Saldos y estado de cuenta en pesos. `cambio` =
+  pesos por 1 real o por 1 dólar (en ARS, 1). Es **opcional**: Ignacio lo pone
+  después (por ejemplo con el cambio del cierre de la tarjeta). Sin cambio queda
+  `cambio: 0` y ese gasto se lleva aparte, con su propio estado de cuenta en su
+  moneda, hasta que se lo pongan con el lápiz → Editar. No se precarga ningún
+  cambio. El formulario de gasto viene en R$; el de pago, en AR$.
 - Categorías configurables desde Config (lista desplegable en el formulario),
   compartidas por la planilla (hoja `Config`, filas `categorias | valor`).
-- Acciones al Apps Script: `GET ?action=get_all` → `{gastos:[...],
+- Acciones al Apps Script: `GET ?action=get_all` → `{version, gastos:[...],
   categorias:[...]}`; `POST add`, `delete`, `config_add` y `config_remove`
   (repetibles sin duplicar). Editar = `delete` + `add` con el mismo ID.
-- Si la planilla no devuelve `categorias` es un Apps Script viejo, que guarda
-  el cambio vacío como 1: en ese caso la app exige el tipo de cambio.
+- `get_all` devuelve `version` (hoy 3). Un Apps Script anterior a la 3 tomaba
+  los reales como base (cambio siempre 1): con él la app muestra un cartel y
+  no deja cargar gastos en reales.
 - Claves de `localStorage` con prefijo `viaje_`.
 
 ## Reglas firmes

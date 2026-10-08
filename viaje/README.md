@@ -6,17 +6,16 @@ instalación ni servidor.
 
 ## Cómo funciona
 
-- **Cargar gasto:** monto (en reales, dólares o pesos), descripción, categoría (de
-  una lista que se arma en Config),
-  quién pagó y quiénes se suman. El gasto se divide en partes iguales entre
-  los que se suman.
-- **Dólares y pesos:** el tipo de cambio es opcional (en dólares: 1 US$ = X
-  R$; en pesos: 1 R$ = X AR$). Si no se pone, el gasto queda en su moneda y
-  aparece aparte, en un estado de cuenta en esa moneda. Cuando se le
-  pone el cambio (lápiz → Editar), pasa a sumarse en reales.
-- **Estado de cuenta:** cuánto puso cada uno, cuánto consumió y el saldo.
-  "Para quedar a mano" dice quién le paga a quién con la menor cantidad de
-  pagos. Cuando alguien paga, se toca "Ya pagó" y queda registrado.
+- **Cargar gasto:** monto (en reales, dólares o pesos; viene elegido reales),
+  descripción, categoría (de una lista que se arma en Config), quién pagó y
+  quiénes se suman. El gasto se divide en partes iguales entre los que se suman.
+- **Todo se pasa a pesos.** El tipo de cambio es opcional (1 R$ = X AR$ o
+  1 US$ = X AR$). Si no se pone, el gasto queda en su moneda y aparece aparte,
+  en un estado de cuenta en esa moneda. Cuando se le pone el cambio (lápiz →
+  Editar), pasa a sumarse en pesos.
+- **Estado de cuenta (en pesos):** cuánto puso cada uno, cuánto consumió y el
+  saldo. "Para quedar a mano" dice quién le paga a quién con la menor cantidad
+  de pagos. Cuando alguien paga, se toca "Ya pagó" y queda registrado.
 - **Lápiz** en cada movimiento para editar o eliminar (eliminar pide confirmación).
 
 ## Dónde viven los datos

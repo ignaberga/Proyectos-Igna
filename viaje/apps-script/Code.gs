@@ -29,7 +29,10 @@
 
 const SHEET_GASTOS = "Gastos";
 const SHEET_CONFIG = "Config";
-const HEADERS = ["ID","Fecha","Tipo","Descripcion","Categoria","Moneda","Monto","Cambio","MontoReales","Pago","Participantes","Cargo"];
+// Version 3: la moneda base es el peso. Cambio = pesos por 1 real o por
+// 1 dolar (1 si el gasto es en pesos; vacio si todavia no se sabe).
+const VERSION = 3;
+const HEADERS = ["ID","Fecha","Tipo","Descripcion","Categoria","Moneda","Monto","Cambio","MontoPesos","Pago","Participantes","Cargo"];
 const CONFIG_HEADERS = ["Tipo","Valor"];
 const DEFAULT_CATEGORIAS = ["Hospedaje","Movilidad","Comida","Supermercado","Salidas","Excursiones","Compras","Otros"];
 
@@ -60,6 +63,8 @@ function getSheet_() {
     sh.getRange("A:B").setNumberFormat("@");
     sh.appendRow(HEADERS);
     sh.setFrozenRows(1);
+  } else if (String(sh.getRange(1, 9).getValue()) !== HEADERS[8]) {
+    sh.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
   }
   return sh;
 }
@@ -83,11 +88,11 @@ function readGastos_() {
       tipo: String(r[2] || "gasto"),
       descripcion: String(r[3] || ""),
       categoria: String(r[4] || ""),
-      moneda: String(r[5] || "BRL"),
+      moneda: String(r[5] || "ARS"),
       monto: Number(r[6]) || 0,
-      // Un gasto en dolares puede quedar sin tipo de cambio (0) hasta que
-      // se lo pongan desde la app.
-      cambio: String(r[5] || "BRL") === "BRL" ? 1 : (Number(r[7]) || 0),
+      // Un gasto en reales o dolares puede quedar sin tipo de cambio (0)
+      // hasta que se lo pongan desde la app.
+      cambio: String(r[5] || "ARS") === "ARS" ? 1 : (Number(r[7]) || 0),
       pago: String(r[9] || ""),
       participantes: String(r[10] || "").split(",").map(function (s) { return s.trim(); }).filter(String),
       cargo: String(r[11] || "")
@@ -97,12 +102,11 @@ function readGastos_() {
 
 function gastoToRow_(g) {
   const monto = Number(g.monto) || 0;
-  const cambio = g.moneda === "BRL" ? 1 : (Number(g.cambio) > 0 ? Number(g.cambio) : "");
+  const cambio = g.moneda === "ARS" ? 1 : (Number(g.cambio) > 0 ? Number(g.cambio) : "");
   return [
     String(g.id), String(g.fecha || ""), String(g.tipo || "gasto"),
-    String(g.descripcion || ""), String(g.categoria || ""), String(g.moneda || "BRL"),
-    // En pesos el cambio es pesos por 1 real; en dolares, reales por 1 dolar.
-    monto, cambio, cambio === "" ? "" : Math.round((g.moneda === "ARS" ? monto / cambio : monto * cambio) * 100) / 100,
+    String(g.descripcion || ""), String(g.categoria || ""), String(g.moneda || "ARS"),
+    monto, cambio, cambio === "" ? "" : Math.round(monto * cambio * 100) / 100,
     String(g.pago || ""), (g.participantes || []).join(", "), String(g.cargo || "")
   ];
 }
@@ -121,7 +125,7 @@ function jsonOut_(obj) {
 
 function doGet(e) {
   const action = (e && e.parameter && e.parameter.action) || "get_all";
-  if (action === "get_all") return jsonOut_({ gastos: readGastos_(), categorias: readCategorias_() });
+  if (action === "get_all") return jsonOut_({ version: VERSION, gastos: readGastos_(), categorias: readCategorias_() });
   return jsonOut_({ error: "accion desconocida" });
 }
 
